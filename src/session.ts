@@ -1,7 +1,7 @@
 /**
  * One tracking session: a video source (webcam or the bundled demo clip) -> PoseLandmarker ->
  * 12-landmark features -> scaler -> TF.js classifier -> rep counter -> canvas overlay.
- * Loaded lazily (dynamic import) so the ~16 MB of WASM + models only download on the first click.
+ * Loaded lazily (dynamic import) so the ~20 MB of WASM + models only download on the first click.
  */
 import { loadPoseLandmarker } from "./pose";
 import { loadClassifier } from "./classifier";
@@ -30,7 +30,7 @@ const DEMO_SRC = "/demo/pushups.mp4";
 
 export async function startSession(opts: SessionOptions): Promise<Session> {
   const { mode, video, canvas } = opts;
-  opts.onStatus("Loading the pose model (about 16 MB the first time, then cached)…");
+  opts.onStatus("Loading the pose model (about 20 MB the first time, then cached)…");
   const [pose, classifier] = await Promise.all([loadPoseLandmarker(), loadClassifier()]);
 
   let stream: MediaStream | null = null;

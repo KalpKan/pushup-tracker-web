@@ -6,7 +6,7 @@ Counts your pushups from the webcam and grades the form of every rep, entirely i
 
 ## What it does
 
-1. **Pose:** MediaPipe `PoseLandmarker` (lite model, VIDEO mode, GPU delegate with a CPU fallback) finds 33 body landmarks on each frame.
+1. **Pose:** MediaPipe `PoseLandmarker` (full model, VIDEO mode, GPU delegate with a CPU fallback) finds 33 body landmarks on each frame.
 2. **Features:** 12 of them (wrists, elbows, shoulders, hips, knees, ankles; `x, y, z` each, 36 numbers) go through the same `StandardScaler` the original training used.
 3. **Form:** a 128→64→32→1 sigmoid MLP (the original `pushup_model_augmented.h5`, converted to TensorFlow.js) answers "good" or "bad" per frame. Held-out accuracy on the original augmented dataset is **94.8 %** with the scaler (63.4 % without it, which is why the scaler constants are baked in, see `src/scaler.ts`).
 4. **Reps:** a line-for-line port of the original shoulder-height state machine. A rep is a top → bottom → top cycle of the shoulders' normalised height; it counts as a **good rep** only when the classifier said "good" at both the top and the bottom. Cycles with bad form are shown as "attempts".
@@ -18,8 +18,8 @@ The same landmark → feature → classifier → rep-counter path runs in unit t
 
 - The classifier was trained on one person's videos, filmed side-on. Film yourself side-on, whole body in frame, in decent light; other angles read as "bad form" more than they should.
 - The rep counter adapts its "top" and "bottom" bands to the shoulder range it has seen, so the first rep of a session may be missed while it calibrates (the original had the same behaviour).
-- Phones work (front camera, mirrored), but the lite pose model on a phone GPU runs at roughly 10 to 20 fps; very fast reps can skip the bottom band.
-- Lighthouse performance is kept ≥ 0.85 by loading nothing heavy until a button is pressed: the first paint is ~4 KB of JS. The 16 MB of models/WASM download on the first click, are cached for a year (`vercel.json`), and are the deliberate trade-off for running with zero servers.
+- Phones work (front camera, mirrored), but the full pose model on a phone GPU runs at roughly 8 to 15 fps; very fast reps can skip the bottom band.
+- Lighthouse performance is kept ≥ 0.85 by loading nothing heavy until a button is pressed: the first paint is ~4 KB of JS. The 20 MB of models/WASM download on the first click, are cached for a year (`vercel.json`), and are the deliberate trade-off for running with zero servers.
 
 ## Privacy and analytics
 
@@ -51,7 +51,7 @@ Health check: https://pushups.kalpkan.com/health.json returns `{"ok":true,"servi
 | `VITE_PUBLIC_POSTHOG_KEY` | Vercel → project `pushups` → Settings → Environment Variables (Production + Preview) | Public `phc_` token of the PostHog project "Kalp portfolio". Leave unset locally and analytics stay off. |
 | `VITE_PUBLIC_POSTHOG_HOST` | same | Always `/ingest`; `vercel.json` rewrites that path to PostHog. |
 | Domain | Vercel project `pushups` → Domains, and Cloudflare DNS for `kalpkan.com` | CNAME `pushups` → the project-specific `*.vercel-dns-017.com` target, proxy OFF. |
-| Models | `public/models/pose_landmarker_lite.task` (5.5 MB, from Google's MediaPipe model page), `public/models/form/` (the converted Keras MLP) | Committed; `public/wasm/` is copied at build time and not committed. |
+| Models | `public/models/pose_landmarker_full.task` (9.4 MB, from Google's MediaPipe model page; the **full** variant, not lite, because the classifier was trained on `model_complexity=1` landmarks and lite's z values make it call good form bad), `public/models/form/` (the converted Keras MLP) | Committed; `public/wasm/` is copied at build time and not committed. |
 
 Names only live here and in `.env.example`; values live only in Vercel.
 

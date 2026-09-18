@@ -19,7 +19,7 @@
         <p class="lede">
           Point your camera at yourself side-on, do pushups, and the page counts the reps whose form was good at the
           top and the bottom. Everything runs on your device: the pose model and the form classifier are downloaded
-          once (about 16 MB) and no frame is ever uploaded. Ported from the
+          once (about 20 MB) and no frame is ever uploaded. Ported from the
           <a href="https://github.com/KalpKan/AI-Pushup-Form-Tracker">Python original</a>.
         </p>
       </header>
@@ -50,7 +50,7 @@
       <section class="notes">
         <h2>How it decides</h2>
         <ul>
-          <li>MediaPipe PoseLandmarker (lite) finds 33 body points on every frame, on your GPU when available.</li>
+          <li>MediaPipe PoseLandmarker (full) finds 33 body points on every frame, on your GPU when available.</li>
           <li>Twelve of them (wrists, elbows, shoulders, hips, knees, ankles) go into a small neural network trained on Kalp's own good- and bad-form videos; it answers "good" or "bad" per frame (94.8 % on held-out frames).</li>
           <li>Shoulder height tracks the movement. A rep is top → bottom → top, and it only counts when the form was good at both ends.</li>
         </ul>

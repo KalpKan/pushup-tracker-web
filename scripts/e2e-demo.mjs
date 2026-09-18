@@ -2,6 +2,8 @@
 // 8.5 s clip run, print the counts and every host the page talked to. Used because the shared
 // automation tab in a background window never loads <video> (Chrome defers media in hidden tabs).
 //   node scripts/e2e-demo.mjs [url]        default http://localhost:4177/
+//   GPU=1 uses the Mac's real GPU (ANGLE/Metal) instead of SwiftShader, which is what a visitor gets.
+//   HOST_RULES="MAP pushups.kalpkan.com 216.198.79.65" works around a stale local DNS cache.
 import puppeteer from "puppeteer-core";
 
 const url = process.argv[2] ?? "http://localhost:4177/";
@@ -9,7 +11,7 @@ const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Conte
 const browser = await puppeteer.launch({
   executablePath: chrome,
   headless: true,
-  args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--autoplay-policy=no-user-gesture-required", "--window-size=1000,1400"],
+  args: [...(process.env.GPU ? ["--use-gl=angle", "--use-angle=metal"] : ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]), "--autoplay-policy=no-user-gesture-required", "--window-size=1000,1400", ...(process.env.HOST_RULES ? [`--host-resolver-rules=${process.env.HOST_RULES}`] : [])],
 });
 try {
   const page = await browser.newPage();
