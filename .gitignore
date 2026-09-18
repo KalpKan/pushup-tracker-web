@@ -1,0 +1,11 @@
+node_modules
+dist
+.venv
+.vercel
+.env.local
+.env*.local
+# copied from node_modules/@mediapipe/tasks-vision/wasm at build time (scripts/copy-wasm.mjs)
+public/wasm
+# Keras 2 re-save used only as converter input (regenerate with scripts/export_model.sh)
+scripts/pushup_form_keras2.h5
+.DS_Store
