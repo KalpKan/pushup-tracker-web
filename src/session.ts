@@ -125,3 +125,11 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
   requestAnimationFrame(loop);
   return { stop };
 }
+
+// Exposed for manual diagnosis from the browser console (no effect on the app).
+declare global {
+  interface Window {
+    __pushups?: { loadPoseLandmarker: typeof loadPoseLandmarker; loadClassifier: typeof loadClassifier };
+  }
+}
+window.__pushups = { loadPoseLandmarker, loadClassifier };
