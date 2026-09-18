@@ -8,13 +8,17 @@ import puppeteer from "puppeteer-core";
 
 const url = process.argv[2] ?? "http://localhost:4177/";
 const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// posthog-js drops every event when navigator.webdriver is true or the UA says HeadlessChrome, so
+// a plain puppeteer run never shows up in PostHog. These two settings make the run count.
 const browser = await puppeteer.launch({
   executablePath: chrome,
   headless: true,
-  args: [...(process.env.GPU ? ["--use-gl=angle", "--use-angle=metal"] : ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]), "--autoplay-policy=no-user-gesture-required", "--window-size=1000,1400", ...(process.env.HOST_RULES ? [`--host-resolver-rules=${process.env.HOST_RULES}`] : [])],
+  ignoreDefaultArgs: ["--enable-automation"],
+  args: ["--disable-blink-features=AutomationControlled", ...(process.env.GPU ? ["--use-gl=angle", "--use-angle=metal"] : ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]), "--autoplay-policy=no-user-gesture-required", "--window-size=1000,1400", ...(process.env.HOST_RULES ? [`--host-resolver-rules=${process.env.HOST_RULES}`] : [])],
 });
 try {
   const page = await browser.newPage();
+  await page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36");
   await page.setViewport({ width: process.env.WIDTH ? Number(process.env.WIDTH) : 1000, height: 1400 });
   const hosts = new Set();
   page.on("request", (r) => hosts.add(new URL(r.url()).host));
