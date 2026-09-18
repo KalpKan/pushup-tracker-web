@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Counts your pushups and grades your form from the webcam, entirely in the browser. No video leaves your device."
+    />
+    <meta name="theme-color" content="#0f1116" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Pushup Form Tracker</title>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <p class="eyebrow">Browser ML · MediaPipe + TensorFlow.js</p>
+        <h1>Pushup Form Tracker</h1>
+        <p class="lede">
+          Point your camera at yourself side-on, do pushups, and the page counts the reps whose form was good at the
+          top and the bottom. Everything runs on your device: the pose model and the form classifier are downloaded
+          once (about 16 MB) and no frame is ever uploaded. Ported from the
+          <a href="https://github.com/KalpKan/AI-Pushup-Form-Tracker">Python original</a>.
+        </p>
+      </header>
+
+      <section aria-labelledby="controls-heading">
+        <h2 id="controls-heading" class="visually-hidden" hidden>Controls</h2>
+        <div class="buttons">
+          <button id="start-camera" class="primary" type="button">Start camera</button>
+          <button id="play-demo" type="button">Play demo clip</button>
+          <button id="stop" type="button" hidden>Stop</button>
+        </div>
+        <p id="status" class="status" aria-live="polite">Nothing loads until you press a button.</p>
+      </section>
+
+      <section id="stage" class="stage" aria-label="Tracker view">
+        <p class="placeholder">Your camera (mirrored) or the demo clip appears here with the skeleton, the rep count and the form verdict drawn on top.</p>
+        <video id="video" playsinline muted></video>
+        <canvas id="canvas" aria-label="Pose overlay"></canvas>
+      </section>
+
+      <ul class="stats" aria-label="Session stats">
+        <li><span class="k">Good reps</span><span class="v" id="stat-good">0</span></li>
+        <li><span class="k">Attempts</span><span class="v" id="stat-total">0</span></li>
+        <li><span class="k">Form now</span><span class="v" id="stat-form">–</span></li>
+        <li><span class="k">Speed</span><span class="v" id="stat-fps">–</span></li>
+      </ul>
+
+      <section class="notes">
+        <h2>How it decides</h2>
+        <ul>
+          <li>MediaPipe PoseLandmarker (lite) finds 33 body points on every frame, on your GPU when available.</li>
+          <li>Twelve of them (wrists, elbows, shoulders, hips, knees, ankles) go into a small neural network trained on Kalp's own good- and bad-form videos; it answers "good" or "bad" per frame (94.8 % on held-out frames).</li>
+          <li>Shoulder height tracks the movement. A rep is top → bottom → top, and it only counts when the form was good at both ends.</li>
+        </ul>
+        <h2>Tips</h2>
+        <ul>
+          <li>Camera at roughly floor level, whole body in frame, side view, one person.</li>
+          <li>The first rep calibrates the range, so the count may lag by one rep.</li>
+          <li>No camera? The demo clip runs the exact same pipeline on a short recording.</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
