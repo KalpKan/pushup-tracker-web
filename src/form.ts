@@ -38,6 +38,12 @@ export interface FrameForm {
   classifierBad: boolean | null;
   /** Body roughly horizontal with straight legs: eligible as the top (or bottom) of a pushup. */
   plank: boolean;
+  /**
+   * Body roughly horizontal with the knees on the floor: the knee-pushup position. Eligible as a top too,
+   * so a knee pushup is an attempt (graded "knees down"); sitting back on the heels or standing is not
+   * (TEST r2 D3, 2026-09-19).
+   */
+  kneePlank: boolean;
 }
 
 // Tuned on the corpus in square (aspect-corrected) units: good reps keep the hip deviation within
@@ -87,14 +93,17 @@ export function geometry(v: readonly number[], aspect: number): Geometry {
 /** Rule verdict for one frame. `prob` is the classifier's P(good form) or null. */
 export function assessFrame(g: Geometry, prob: number | null): FrameForm {
   const faults: Fault[] = [];
-  if (g.kneeAngle < KNEE_DOWN_DEG) faults.push("knees down");
-  if (g.hipDev < PIKE_DEV) faults.push("hips too high");
+  const kneesDown = g.kneeAngle < KNEE_DOWN_DEG;
+  if (kneesDown) faults.push("knees down");
+  // The hip rules read the hip's distance from the shoulder-ankle line, which means nothing once the
+  // knees are bent on the floor (a knee pushup measures as a -0.4 "pike"); the knees are the reason then.
+  else if (g.hipDev < PIKE_DEV) faults.push("hips too high");
   else if (g.hipDev > SAG_DEV) faults.push("hips sagging");
   // The classifier saw one person from one side: measured on the corpus, it scores the other person's clean
   // reps 0.00-0.05 (IMG_1359, IMG_1512) whichever way the features are mirrored, so it is only trusted when
   // the visitor is set up the way the training clips were (feet on the left of the raw frame); otherwise
   // the geometry rules alone grade the form.
   const classifierBad = prob == null || !g.trainingOrientation ? null : prob <= 0.5;
-  const plank = g.bodyAngle <= PLANK_MAX_BODY_DEG && g.kneeAngle >= KNEE_DOWN_DEG;
-  return { faults, classifierBad, plank };
+  const horizontal = g.bodyAngle <= PLANK_MAX_BODY_DEG;
+  return { faults, classifierBad, plank: horizontal && !kneesDown, kneePlank: horizontal && kneesDown };
 }

@@ -12,7 +12,9 @@
  *     deeper or shallower rep, a drifting top or a moved camera cannot poison the next one;
  *   - only lets plank-like samples move the top reference or open a descent, so standing up, kneeling
  *     to rest, sitting back or walking into the frame never look like a rep;
- *   - judges the form at each end on the majority of the frames spent there, not one frame;
+ *   - judges the form at each end on the majority of the frames spent there (the top: the 0.4 s before the
+ *     descent; the bottom: the frames within 20 % of the depth), and asks the classifier about the bottom
+ *     plus the ascent, not one frame;
  *   - holds back a sample that jumps by more than a rep's minimum depth until the next one agrees, so a
  *     single glitched landmark frame is neither a rep nor a new top.
  * All decisions are on time (seconds) and body-scaled distances, never on frame counts.
@@ -24,7 +26,7 @@ export interface RepSample {
   shoulderY: number;
   /** Body scale: 2D torso length in the same units. */
   scale: number;
-  /** Whether this frame may serve as the top of a pushup (see form.ts). */
+  /** Whether this frame may serve as the top of a pushup: a plank or a knee plank (see form.ts). */
   plank: boolean;
   /** Faults that apply at the top and the bottom. */
   faults: readonly string[];
@@ -44,6 +46,8 @@ export interface RepEvent {
   totalReps: number;
   /** Depth of this rep in torso lengths (diagnostics). */
   depth: number;
+  /** Mean classifier P(good) over the frames it was asked about, or null (diagnostics). */
+  clfMean: number | null;
 }
 
 export interface PartialEvent {
@@ -67,13 +71,21 @@ export const MIN_DEPTH = 0.25;
 export const LEARNED_DEPTH_FRACTION = 0.5;
 /** A rep is complete when the shoulders are back up this fraction of the rep's own depth. */
 export const RETURN_FRACTION = 0.65;
-/** Frames within this fraction of the depth from an extreme make up that end's form window. */
+/** Frames within this fraction of the depth from an extreme make up that end's geometry window. */
 const END_WINDOW = 0.2;
+/**
+ * The top is judged on the frames of this many seconds just before the descent opened, not on everything
+ * since the last rep: IMG_1360 rests its hips on the floor with straight arms, straightens, then does a
+ * clean rep, and the rest frames outvoted the clean top (TEST r2 D2, 2026-09-19).
+ */
+const TOP_WINDOW_S = 0.4;
 /** A dip of at least this fraction of the minimum depth that turns back up is reported as a partial. */
 const PARTIAL_FRACTION = 0.5;
 const MAX_WINDOW = 400;
 /** Fault name for a classifier "bad" at the bottom (shared with tracker.ts). */
 export const CLASSIFIER_FAULT = "keep your body straight";
+/** Fault name of the knees-on-the-floor rule (form.ts): a rep that starts in a plank and ends on the knees is a rest, not an attempt. */
+export const KNEES_FAULT = "knees down";
 
 interface Frame { t: number; y: number; faults: readonly string[]; bottomFaults: readonly string[]; prob: number | null }
 
@@ -141,11 +153,19 @@ export function createRepCounter() {
       for (const x of faults) counts.set(x, (counts.get(x) ?? 0) + 1);
     }
     if (badFrames * 2 > frames.length) return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    if (bottom) {
-      const probs = frames.map((f) => f.prob).filter((p): p is number => p != null);
-      if (probs.length * 2 >= frames.length && probs.reduce((a, b) => a + b, 0) / probs.length <= 0.5) return CLASSIFIER_FAULT;
-    }
     return null;
+  }
+
+  /** Share of the frames carrying `fault`. */
+  function share(frames: Frame[], fault: string): number {
+    return frames.length ? frames.filter((f) => f.faults.includes(fault)).length / frames.length : 0;
+  }
+
+  /** The classifier's verdict: mean P(good) over the frames that carry one, when at least half of them do. */
+  function classifierMean(frames: Frame[]): number | null {
+    const probs = frames.map((f) => f.prob).filter((p): p is number => p != null);
+    if (!probs.length || probs.length * 2 < frames.length) return null;
+    return probs.reduce((a, b) => a + b, 0) / probs.length;
   }
 
   function keep(list: Frame[], f: Frame): void {
@@ -209,9 +229,29 @@ export function createRepCounter() {
     const depth = bottomY - topY;
     const rise = bottomY - y;
     if (rise >= RETURN_FRACTION * depth) {
-      const topWindow = upFrames.filter((f) => f.y <= topY + END_WINDOW * depth);
+      const descentT = downFrames[0].t;
+      const topWindow = upFrames.filter((f) => f.y <= topY + END_WINDOW * depth && f.t >= descentT - TOP_WINDOW_S);
       const bottomWindow = downFrames.filter((f) => f.y >= bottomY - END_WINDOW * depth);
-      const reason = verdict(topWindow.length ? topWindow : upFrames.slice(-3), false) ?? verdict(bottomWindow, true);
+      const topFrames = topWindow.length ? topWindow : upFrames.slice(-3);
+      // Knees up at the top but down at the bottom: the shoulders dropped because the knees came down
+      // (IMG_1513 7.7 s, dropping to the knees to rest), not a pushup and not an attempt. A knee pushup
+      // (knees down at both ends) is an attempt, graded "knees down" below.
+      if (share(bottomWindow, KNEES_FAULT) > 0.5 && share(topFrames, KNEES_FAULT) <= 0.5) {
+        phase = "waiting";
+        upFrames = [];
+        downFrames = [];
+        maxDip = 0;
+        partialSent = false;
+        return null;
+      }
+      // The classifier is averaged over the bottom window AND the whole ascent up to here (RETURN_FRACTION
+      // of the depth): the faults it was trained on (a collapse on the floor, the chest rising before the
+      // hips) show on the way up, while at the very bottom a body lying on the floor looks straight and a
+      // clean chest-to-floor rep looks like a sag; judged on the bottom alone it flipped 5 of 69 labelled
+      // reps on the site's own landmarks (TEST r2 D2, 2026-09-19).
+      const classifierFrames = downFrames.filter((f) => f.t >= bottomT || f.y >= bottomY - END_WINDOW * depth);
+      const clfMean = classifierMean(classifierFrames);
+      const reason = verdict(topFrames, false) ?? verdict(bottomWindow, true) ?? (clfMean != null && clfMean <= 0.5 ? CLASSIFIER_FAULT : null);
       const good = reason == null;
       totalReps++;
       if (good) goodReps++;
@@ -224,7 +264,7 @@ export function createRepCounter() {
       downFrames = [];
       maxDip = 0;
       partialSent = false;
-      return { kind: "rep", t: sample.t, good, reason, goodReps, totalReps, depth: depth / sample.scale };
+      return { kind: "rep", t: sample.t, good, reason, goodReps, totalReps, depth: depth / sample.scale, clfMean };
     }
     phase = rise > 0.1 * depth ? "ascending" : "bottom";
     // Back near the top while ascending is handled above; a rise that never reaches RETURN_FRACTION but

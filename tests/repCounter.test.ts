@@ -80,6 +80,23 @@ describe("createRepCounter (time-based, body-scaled)", () => {
     expect(r.totalReps).toBe(1);
   });
 
+  // D3 (TEST r2): a knee pushup is an attempt (graded "knees down"); dropping from a plank onto the knees is not.
+  it("counts a knee pushup (kneeling top, knees down throughout) as an attempt graded 'knees down'", () => {
+    const r = run(wave({ reps: 2, period: 1.4, fps: 30, faults: () => ["knees down"] }));
+    expect(r.totalReps).toBe(2);
+    expect(r.goodReps).toBe(0);
+    expect(r.events.map((e) => e.reason)).toEqual(["knees down", "knees down"]);
+  });
+
+  it("does not count a plank top that bottoms out on the knees (dropping to the knees to rest)", () => {
+    const s = wave({ reps: 1, period: 1.4, fps: 30, hold: 1 });
+    // Knees come down on the way down and stay down through the bottom and the rise.
+    const bottomT = 1 + 0.7;
+    for (const f of s) if (f.t > bottomT - 0.4) f.faults = ["knees down"];
+    const r = run(s);
+    expect(r.totalReps).toBe(0);
+  });
+
   it("judges each end on the majority of its frames, not a single one", () => {
     // One noisy 'bad' frame at the very bottom of every rep must not flip the verdict.
     const r = run(wave({ reps: 3, period: 1.2, fps: 30, bottomFaults: (t) => (Math.abs(((t - 0.5) % 1.2) - 0.6) < 0.02 ? ["keep your body straight"] : []) }));

@@ -22,6 +22,17 @@ describe("form rules", () => {
     expect(f.plank).toBe(false);
   });
 
+  // D3 (TEST r2): a knee pushup must be an attempt graded "knees down", so the horizontal-body kneeling
+  // position is an eligible top ("kneePlank"); sitting back on the heels or standing is not.
+  it("a knee-pushup position (body horizontal, knees on the floor) is an eligible kneeling top", () => {
+    const tr = trace("test_video_2");
+    const top = assessFrame(geometry(at(tr, 14.0).features!), 1);
+    expect(top.plank).toBe(false);
+    expect(top.kneePlank).toBe(true);
+    expect(top.faults).toContain("knees down");
+    expect(assessFrame(geometry(at(trace("test_video3"), 13.4).features!), 1).kneePlank).toBe(false); // standing
+  });
+
   it("calls the sag in bad_IMG_4470 'hips sagging'", () => {
     expect(assessFrame(geometry(at(trace("bad_IMG_4470"), 5.5).features!), 0).faults).toContain("hips sagging");
   });

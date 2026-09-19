@@ -8,6 +8,7 @@ import posthog from "posthog-js";
  *   session_started    { mode: "camera" | "demo" }
  *   rep_counted        { good: boolean, reason: string | null }  (reason = why the rep was bad; never landmarks or images)
  *   demo_video_played  {}
+ *   session_failed     { mode, message }  (the error message of a session that could not start or died mid-loop; no frames, no landmarks)
  * Without VITE_PUBLIC_POSTHOG_KEY (local dev, a fork) every call is a silent no-op.
  */
 let initialised = false;
@@ -31,6 +32,7 @@ type Events = {
   session_started: { mode: "camera" | "demo" };
   rep_counted: { good: boolean; reason: string | null };
   demo_video_played: Record<string, never>;
+  session_failed: { mode: "camera" | "demo"; message: string };
 };
 
 export function capture<E extends keyof Events>(event: E, props: Events[E]): void {

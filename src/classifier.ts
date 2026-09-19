@@ -8,16 +8,37 @@ import * as tf from "@tensorflow/tfjs";
 
 export const INPUTS = 24;
 
+/**
+ * Where the browser fetches the model. vercel.json serves everything under /models/ with
+ * `cache-control: immutable, max-age=31536000`, so a retrained model MUST get a new directory name
+ * (form-v3, ...): on 2026-09-19 the 24-input model was written over the 36-input one at /models/form/
+ * and every returning browser ran the new code against the cached old model (TEST r2 D1). The
+ * tests in tests/classifierUrl.test.ts pin this.
+ */
+export const MODEL_URL = "/models/form-v3/model.json";
+
 export interface Classifier {
   predict(scaledVector: readonly number[]): number;
   dispose(): void;
 }
 
-export async function createClassifier(source: string | tf.io.IOHandler): Promise<Classifier> {
+export class ModelShapeError extends Error {
+  constructor(got: number, source: string) {
+    super(`form classifier at ${source} expects ${got} inputs, this code computes ${INPUTS} (stale cached model?)`);
+    this.name = "ModelShapeError";
+  }
+}
+
+export async function createClassifier(source: string | tf.io.IOHandler, options?: tf.io.LoadOptions): Promise<Classifier> {
   // The MLP is tiny; the CPU backend avoids fighting MediaPipe for the GPU and has no warm-up cost.
   await tf.setBackend("cpu");
   await tf.ready();
-  const model = await tf.loadLayersModel(source);
+  const model = await tf.loadLayersModel(source, options);
+  const width = model.inputs[0]?.shape?.[1];
+  if (width !== INPUTS) {
+    model.dispose();
+    throw new ModelShapeError(Number(width), typeof source === "string" ? source : "memory");
+  }
   return {
     predict(scaledVector) {
       return tf.tidy(() => {
@@ -31,7 +52,17 @@ export async function createClassifier(source: string | tf.io.IOHandler): Promis
   };
 }
 
-/** Browser entry point: the model files are served by the site itself from public/models/form. */
-export function loadClassifier(): Promise<Classifier> {
-  return createClassifier("/models/form/model.json");
+/**
+ * Browser entry point. If the browser's cache ever hands back a model of the wrong width (the D1 failure
+ * mode), fetch it again bypassing the HTTP cache before giving up; a model that is still wrong is a
+ * deploy fault and is reported by the caller.
+ */
+export async function loadClassifier(): Promise<Classifier> {
+  try {
+    return await createClassifier(MODEL_URL);
+  } catch (err) {
+    if (!(err instanceof ModelShapeError)) throw err;
+    console.warn(`${err.message}; reloading it past the cache`);
+    return createClassifier(MODEL_URL, { requestInit: { cache: "reload" } });
+  }
 }

@@ -20,10 +20,13 @@ export interface Overlay {
   hint: string | null;
   /** The rep that just finished, or a partial-dip notice (centre). */
   flash: { text: string; good: boolean } | null;
+  /** Counting is paused while a placement hint is up: grey skeleton, no verdict, "paused" by the count. */
+  paused?: boolean;
 }
 
 const GOOD = "#5ee38a";
 const BAD = "#ff6b6b";
+const PAUSED = "#b8b8b8";
 
 export function draw(ctx: CanvasRenderingContext2D, source: CanvasImageSource, o: Overlay): void {
   const { width: w, height: h } = ctx.canvas;
@@ -36,7 +39,7 @@ export function draw(ctx: CanvasRenderingContext2D, source: CanvasImageSource, o
   if (o.landmarks) {
     const good = o.verdict?.good ?? true;
     ctx.lineWidth = Math.max(2, w / 240);
-    ctx.strokeStyle = good ? GOOD : BAD;
+    ctx.strokeStyle = o.paused ? PAUSED : good ? GOOD : BAD;
     ctx.fillStyle = "#ffffff";
     for (const [a, b] of CONNECTIONS) {
       const pa = o.landmarks[a];
@@ -65,7 +68,9 @@ export function draw(ctx: CanvasRenderingContext2D, source: CanvasImageSource, o
   label(ctx, `${o.goodReps}`, pad, pad, "#ffe66d");
   ctx.font = `600 ${small}px system-ui, sans-serif`;
   label(ctx, `good rep${o.goodReps === 1 ? "" : "s"} · ${o.totalReps} attempt${o.totalReps === 1 ? "" : "s"}`, pad, pad + big + 4, "#ffffff");
-  if (o.verdict) {
+  if (o.paused) {
+    label(ctx, "Counting paused", pad, pad + big + small + 12, PAUSED);
+  } else if (o.verdict) {
     const text = o.verdict.good ? "Good form" : `Bad form: ${o.verdict.reason ?? "unsure"}`;
     label(ctx, text, pad, pad + big + small + 12, o.verdict.good ? GOOD : BAD);
   }

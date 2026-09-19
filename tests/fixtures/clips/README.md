@@ -19,6 +19,10 @@ All committed clips are 640 px wide, 30 fps, H.264, no audio, re-encoded from Ka
 `scripts/make-clips.sh` (source sha256 prefixes are in the json). The test videos were public in
 `KalpKan/AI-Pushup-Form-Tracker` before its data purge; the training clips are Kalp's own.
 
+Label changes after the fact are recorded in the json entry's `note` (FIX r2, 2026-09-19: `IMG_1359` rep 6 at
+13.6 s went from high to medium confidence because the hips measure 0.33 torso above the shoulder–ankle line
+there, a mild pike on the full-resolution frames).
+
 How the labels were made (2026-09-18): frame contact sheets at 4 fps of every clip were read by the SPEC
 agent and each top → bottom → top cycle was written down with the time of its lowest point; the Python
 shoulder-height trace was used only to pin the times. Form follows the definition at the top of the json

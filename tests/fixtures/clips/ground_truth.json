@@ -256,7 +256,7 @@
         { "n": 3, "bottom_s": 8.3, "form": "good", "confidence": "high" },
         { "n": 4, "bottom_s": 9.3, "form": "good", "confidence": "high" },
         { "n": 5, "bottom_s": 11.2, "form": "good", "confidence": "high" },
-        { "n": 6, "bottom_s": 13.6, "form": "good", "confidence": "high" },
+        { "n": 6, "bottom_s": 13.6, "form": "good", "confidence": "medium", "note": "relabelled high -> medium by FIX r2 (2026-09-19): the hips sit 0.33 torso above the shoulder-ankle line at this bottom on both landmark sets (further than the labelled pike of IMG_1512 at 32.6 s, -0.28) and the full-resolution frames at 13.3-13.6 s show the hips raised well above the 15.4 s bottom; a coach could call it a mild pike" },
         { "n": 7, "bottom_s": 15.4, "form": "good", "confidence": "high" },
         { "n": 8, "bottom_s": 16.4, "form": "good", "confidence": "high" },
         { "n": 9, "bottom_s": 17.5, "form": "good", "confidence": "high" }

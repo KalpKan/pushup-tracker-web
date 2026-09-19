@@ -10,7 +10,7 @@ import { scale } from "./scaler";
 import { formFeatures } from "./formFeatures";
 import { createTracker, type FrameVerdict } from "./tracker";
 import type { RepEvent, RepState } from "./repCounter";
-import { placementHint, HINTS } from "./hints";
+import { placementHint, pausesCounting, createHintDebouncer, HINTS } from "./hints";
 import { draw } from "./draw";
 
 export type Mode = "camera" | "demo";
@@ -21,8 +21,11 @@ export interface SessionOptions {
   canvas: HTMLCanvasElement;
   onStatus: (text: string) => void;
   onRep: (event: RepEvent) => void;
-  onFrame: (state: RepState, verdict: FrameVerdict | null, fps: number, hint: string | null) => void;
+  /** `hint` is the placement hint on screen; `paused` says the counter is not counting (then `verdict` is null). */
+  onFrame: (state: RepState, verdict: FrameVerdict | null, fps: number, hint: string | null, paused: boolean) => void;
   onEnd: () => void;
+  /** The frame loop threw (a bad model, a lost WebGL context, ...): the session is already stopped. */
+  onError: (err: Error) => void;
 }
 
 export interface Session {
@@ -103,16 +106,18 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
   const tracker = createTracker();
   // ?trace in the URL records every analysed frame (time, shoulder height, probability, faults) into
   // window.__pushupsTrace so scripts/e2e-corpus.mjs can save it next to the Python traces. Nothing leaves the page.
-  const trace: TraceFrame[] | null = new URLSearchParams(location.search).has("trace") ? [] : null;
+  const traceMode = new URLSearchParams(location.search).get("trace");
+  const trace: TraceFrame[] | null = traceMode != null ? [] : null;
+  // ?trace=full also keeps every detected pose (33 x [x, y, z, visibility]) and the raw hint per frame, for tuning hints.ts.
+  const fullTrace = traceMode === "full";
   if (trace) window.__pushupsTrace = trace;
   const mirror = mode === "camera";
   let running = true;
   let frames = 0;
   let fpsStart = performance.now();
   let fps = 0;
-  let hintCandidate: string | null = null;
-  let hintSince = 0;
-  let shownHint: string | null = null;
+  const hints = createHintDebouncer(HINT_DEBOUNCE_MS);
+  const pauseGate = createHintDebouncer(HINT_DEBOUNCE_MS);
   let flash: { text: string; good: boolean; until: number } | null = null;
   opts.onStatus(mode === "camera" ? "Get into pushup position side-on to the camera, whole body in frame." : "Running the bundled clip.");
 
@@ -136,24 +141,22 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
     return v >= MIN_VISIBILITY;
   }
 
-  function debounceHint(raw: string | null, now: number): string | null {
-    if (raw !== hintCandidate) {
-      hintCandidate = raw;
-      hintSince = now;
-    } else if (now - hintSince >= HINT_DEBOUNCE_MS) {
-      shownHint = raw;
-    }
-    return shownHint;
-  }
-
   function step(now: number) {
     const stamp = Math.max(now, lastStamp + 1); // detectForVideo needs strictly increasing timestamps
     lastStamp = stamp;
     const result = pose.detectForVideo(video, stamp);
     const poses = result.landmarks as Landmark[][];
     const landmarks = pickPose(poses);
+    // Placement first (both held with hysteresis, see hints.ts): the hint tells the visitor what to fix; while
+    // the problem is one that makes a count meaningless (no body, two bodies, frontal, head or feet gone)
+    // nothing is counted or graded, so a cropped or crowded frame cannot produce a silent wrong count
+    // (TEST r2 D4/D5). A head merely touching the edge shows the hint and keeps counting.
+    const hintInput = { poses, luminance: poses.length ? null : measureLuminance(now) };
+    const rawHint = placementHint(hintInput);
+    const hint = hints.next(rawHint, now);
+    const paused = pauseGate.next(rawHint != null && pausesCounting(hintInput) ? "pause" : null, now) != null;
     let verdict: FrameVerdict | null = null;
-    if (landmarks && visible(landmarks)) {
+    if (landmarks && visible(landmarks) && !paused) {
       const f = features(landmarks);
       const prob = classifier.predict(scale(formFeatures(f.vector, aspect)));
       const input = { t: stamp / 1000, vector: f.vector, prob, aspect };
@@ -167,9 +170,15 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
         flash = { text: "Go lower: that dip was too shallow to count", good: false, until: now + REP_FLASH_MS };
       }
     }
-    if (trace && !landmarks) trace.push({ t: stamp / 1000, mediaTime: video.currentTime, shoulderY: null, prob: null, features: null, faults: null, plank: false, event: null, poses: poses.length });
-    const rawHint = placementHint({ poses, luminance: poses.length ? null : measureLuminance(now) });
-    const hint = debounceHint(rawHint, now);
+    if (trace && (!landmarks || paused)) trace.push({ t: stamp / 1000, mediaTime: video.currentTime, shoulderY: null, prob: null, features: null, faults: null, plank: false, event: null, poses: poses.length });
+    if (trace && fullTrace) {
+      const last = trace[trace.length - 1];
+      if (last && last.t === stamp / 1000) {
+        last.rawHint = rawHint;
+        last.hint = hint;
+        last.allPoses = poses.map((p) => p.map((l) => [Math.round(l.x * 1e3) / 1e3, Math.round(l.y * 1e3) / 1e3, Math.round(l.z * 1e3) / 1e3, Math.round((l.visibility ?? 1) * 1e3) / 1e3]));
+      }
+    }
     const st = tracker.state();
     draw(ctx!, video, {
       landmarks,
@@ -178,6 +187,7 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
       verdict: verdict ? { good: verdict.good, reason: verdict.reason } : null,
       mirror,
       hint,
+      paused: paused && landmarks != null,
       flash: flash && flash.until > now ? { text: flash.text, good: flash.good } : null,
     });
     frames++;
@@ -186,7 +196,7 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
       frames = 0;
       fpsStart = now;
     }
-    opts.onFrame(st, verdict, fps, hint);
+    opts.onFrame(st, verdict, fps, hint, paused);
   }
 
   // One analysis per decoded video frame: requestVideoFrameCallback where it exists (Chrome, Safari,
@@ -211,7 +221,14 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
     schedule();
     if (rvfc || (video.currentTime !== lastTime && video.readyState >= 2)) {
       lastTime = video.currentTime;
-      step(performance.now());
+      // An exception here used to be swallowed by requestVideoFrameCallback: 254 of them per demo play, a
+      // black stage and "0 good of 0" (TEST r2 D1). Stop and tell the visitor instead.
+      try {
+        step(performance.now());
+      } catch (err) {
+        stop();
+        opts.onError(err instanceof Error ? err : new Error(String(err)));
+      }
     }
   }
   // The demo clip's `ended` can fire between frame callbacks; make sure the session closes.
@@ -236,6 +253,10 @@ export { HINTS };
 
 export interface TraceFrame {
   t: number;
+  /** ?trace=full only. */
+  rawHint?: string | null;
+  hint?: string | null;
+  allPoses?: number[][][];
   mediaTime: number;
   shoulderY: number | null;
   prob: number | null;

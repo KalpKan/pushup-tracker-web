@@ -51,16 +51,17 @@
         <h2>How it decides</h2>
         <ul>
           <li>MediaPipe PoseLandmarker (full) finds 33 body points on every frame, on your GPU when available.</li>
-          <li>Shoulder height tracks the movement. A rep is top → bottom → top; the dip must be at least a quarter of your torso length (shallower dips say "go lower" and do not count), and standing up, kneeling or walking into the frame never count.</li>
-          <li>Form is judged on the frames at the top and at the bottom, by geometry first: hips more than a fifth of a torso below the shoulder–ankle line is "hips sagging", above it is "hips too high", a knee angle under 130° is "knees down".</li>
-          <li>At the bottom, a small neural network trained on Kalp's own good- and bad-form videos (94.8 % on held-out frames) adds a "keep your body straight" verdict. It only knows one camera orientation (feet on the left of the picture, head on the right), so with the head on the left only the geometry applies.</li>
+          <li>Shoulder height tracks the movement. A rep is top → bottom → top; the dip must be at least a quarter of your torso length (shallower dips say "go lower" and do not count). Standing up, walking into the frame or dropping from a plank onto your knees to rest never count; a knee pushup (knees on the floor from the start) counts as an attempt and is graded "knees down".</li>
+          <li>Form is judged on the moments just before the descent and at the bottom, by geometry first: hips more than a fifth of a torso below the shoulder–ankle line is "hips sagging", above it is "hips too high", a knee angle under 130° is "knees down".</li>
+          <li>A small neural network trained on Kalp's own good- and bad-form videos (96.9 % on held-out frames; five networks averaged, trained with landmark jitter so it tolerates a phone camera) watches the bottom and the way up and adds a "keep your body straight" verdict, which is where a chest-first "worm" ascent or collapsing onto the floor shows. It only knows one camera orientation (feet on the left of the picture, head on the right), so with the head on the left only the geometry applies.</li>
+          <li>While a placement hint is on screen (head or feet cut off, two people, frontal view, too dark) counting is paused and the skeleton turns grey, so a half-visible body cannot produce a silent wrong count.</li>
         </ul>
         <h2>Tips</h2>
         <ul>
           <li>Camera at roughly floor level, whole body in frame, side view, one person. The overlay tells you when the head or feet are cut off, when two people are in the frame, when you face the camera instead of side-on, and when it is too dark.</li>
           <li>The first rep counts: there is no calibration, the range is measured against your own body.</li>
-          <li>Limits: the classifier saw one person from one side, so a frontal view is not graded; with a second person in the frame the biggest body is tracked; a pike (hips high) and kneeling are caught by geometry, a shallow sag mostly by the classifier.</li>
-          <li>No camera? The demo clip runs the exact same pipeline on a short recording (4 attempts, 2 good).</li>
+          <li>Limits: the classifier saw one person from one side, so a frontal view is not graded; a pike (hips high) and kneeling are caught by geometry, a shallow sag mostly by the classifier, and a rep it scores right at 50/50 can land either way.</li>
+          <li>No camera? The demo clip runs the exact same pipeline on a short recording: 4 attempts, of which 2–3 are clean by a coach's eye; the last one (chest up before the hips) is the kind of rep the classifier is least sure about.</li>
         </ul>
       </section>
     </main>

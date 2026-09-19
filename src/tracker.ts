@@ -39,7 +39,8 @@ export function createTracker() {
     const g = geometry(input.vector, input.aspect);
     const form = assessFrame(g, input.prob);
     const shoulderY = (input.vector[13] + input.vector[16]) / 2;
-    return counter.push({ t: input.t, shoulderY, scale: g.torso, plank: form.plank, faults: form.faults, bottomFaults: [], bottomProb: form.classifierBad == null ? null : input.prob });
+    // A plank or a knee plank may serve as the top of a rep (the knee pushup is then graded "knees down").
+    return counter.push({ t: input.t, shoulderY, scale: g.torso, plank: form.plank || form.kneePlank, faults: form.faults, bottomFaults: [], bottomProb: form.classifierBad == null ? null : input.prob });
   }
 
   /** Smoothed per-frame verdict for the overlay: majority of the last LIVE_WINDOW_S seconds (at least 3 frames). */

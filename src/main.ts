@@ -51,10 +51,10 @@ async function start(mode: Mode) {
         totalEl.textContent = String(ev.totalReps);
         capture("rep_counted", { good: ev.good, reason: ev.reason });
       },
-      onFrame: (st, verdict, fps) => {
+      onFrame: (st, verdict, fps, _hint, paused) => {
         goodEl.textContent = String(st.goodReps);
         totalEl.textContent = String(st.totalReps);
-        formEl.textContent = verdict == null ? "no pose" : verdict.good ? "good" : `bad: ${verdict.reason ?? "unsure"}`;
+        formEl.textContent = paused ? "paused" : verdict == null ? "no pose" : verdict.good ? "good" : `bad: ${verdict.reason ?? "unsure"}`;
         fpsEl.textContent = fps ? `${fps} fps` : "–";
       },
       onEnd: () => {
@@ -62,6 +62,15 @@ async function start(mode: Mode) {
         session = null;
         setButtons(false);
         setStatus(`Clip finished: ${result}. Play it again or start your camera.`);
+      },
+      onError: (err) => {
+        session = null;
+        stage.classList.remove("live");
+        formEl.textContent = "–";
+        fpsEl.textContent = "–";
+        setButtons(false);
+        setStatus(`Something went wrong: ${err.message}. Reload the page and try again.`);
+        capture("session_failed", { mode, message: err.message.slice(0, 160) });
       },
     });
     capture("session_started", { mode });
@@ -71,11 +80,9 @@ async function start(mode: Mode) {
     session = null;
     stage.classList.remove("live");
     const msg = err instanceof Error ? err.message : String(err);
-    setStatus(
-      /NotAllowed|Permission|denied/i.test(msg)
-        ? "Camera permission was refused. You can still watch the demo clip."
-        : `Could not start: ${msg}`,
-    );
+    const refused = /NotAllowed|Permission|denied/i.test(msg);
+    setStatus(refused ? "Camera permission was refused. You can still watch the demo clip." : `Could not start: ${msg}. Reload the page and try again.`);
+    if (!refused) capture("session_failed", { mode, message: msg.slice(0, 160) });
     setButtons(false);
   } finally {
     starting = false;

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as tf from "@tensorflow/tfjs";
-import { createClassifier, INPUTS } from "../src/classifier";
+import { createClassifier, INPUTS, MODEL_URL } from "../src/classifier";
 import { MEAN, SCALE, scale } from "../src/scaler";
-import probs from "./fixtures/form_v2_probs.json";
+import probs from "./fixtures/form_v3_probs.json";
 
-// Load the converted TF.js model from disk (the browser fetches /models/form/model.json instead).
+// Load the converted TF.js model from disk (the browser fetches MODEL_URL instead).
 async function loadFromDisk() {
-  const dir = new URL("../public/models/form/", import.meta.url);
+  const dir = new URL(`../public${MODEL_URL.replace(/model\.json$/, "")}`, import.meta.url);
   const modelJson = JSON.parse(readFileSync(new URL("model.json", dir), "utf8"));
   const bin = readFileSync(new URL("group1-shard1of1.bin", dir));
   const weightData = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength);
@@ -19,7 +19,7 @@ async function loadFromDisk() {
   return createClassifier(handler);
 }
 
-describe("classifier v2 (TF.js port of scripts/form_v2.h5)", () => {
+describe("classifier v3 (TF.js port of scripts/form_v3.h5)", () => {
   it("scaler constants have 24 entries and scale() standardises", () => {
     expect(MEAN).toHaveLength(INPUTS);
     expect(SCALE).toHaveLength(INPUTS);
