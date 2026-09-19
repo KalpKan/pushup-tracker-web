@@ -39,5 +39,5 @@
       ]
     }
   ],
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- . ':(exclude)tests' ':(exclude).github' ':(exclude)README.md' ':(exclude).gitignore' ':(exclude)scripts/e2e-corpus.mjs' ':(exclude)scripts/e2e-demo.mjs' ':(exclude)scripts/make-mjpeg.mjs' ':(exclude)scripts/make-clips.sh' ':(exclude)scripts/make_traces.py'"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- src public index.html package.json package-lock.json vite.config.ts vercel.json tsconfig.json scripts/copy-wasm.mjs"
 }
