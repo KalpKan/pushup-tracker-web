@@ -206,11 +206,13 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
       opts.onEnd();
       return;
     }
+    // Ask for the next frame before doing this one's work, otherwise Chrome hands out only every other
+    // frame of a 30 fps file (measured 67 ms between analyses with the request made afterwards).
+    schedule();
     if (rvfc || (video.currentTime !== lastTime && video.readyState >= 2)) {
       lastTime = video.currentTime;
       step(performance.now());
     }
-    schedule();
   }
   // The demo clip's `ended` can fire between frame callbacks; make sure the session closes.
   video.addEventListener("ended", () => { if (running) { stop(); opts.onEnd(); } }, { once: true });
