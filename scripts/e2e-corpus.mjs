@@ -9,7 +9,9 @@
 // GPU=1 uses the Mac's real GPU (ANGLE/Metal), which is what a visitor gets; without it Chrome renders
 // with SwiftShader and the pose model runs at a few fps, so the count is not representative.
 // REPORT_ONLY=1 prints the table without failing the process. Results are written to
-// tests/fixtures/results/<timestamp>.json (git-ignored) so a fixer can diff rounds.
+// tests/fixtures/results/<timestamp>.json (git-ignored) so a fixer can diff rounds. TRACE_DIR=<dir> also
+// saves the page's own per-frame trace (?trace, see session.ts) as <dir>/<id>.json, the browser-side
+// counterpart of tests/fixtures/traces/<id>.json, for comparing MediaPipe-in-Chrome with the Python landmarks.
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -42,7 +44,7 @@ async function runClip(clip) {
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-    await page.goto(url, { waitUntil: "networkidle0" });
+    await page.goto(process.env.TRACE_DIR ? `${url}${url.includes("?") ? "&" : "?"}trace` : url, { waitUntil: "networkidle0" });
     await page.click("#start-camera");
     // The status flips to the positioning hint right after video.play(); the fake camera started at getUserMedia.
     await page.waitForFunction(() => /pushup position|whole body/i.test(document.getElementById("status").textContent), { timeout: 120_000 });
@@ -63,6 +65,11 @@ async function runClip(clip) {
       status: document.getElementById("status").textContent,
     }));
     if (process.env.SHOT_DIR) { mkdirSync(process.env.SHOT_DIR, { recursive: true }); await page.screenshot({ path: join(process.env.SHOT_DIR, `${clip.id}.png`), fullPage: true }); }
+    if (process.env.TRACE_DIR) {
+      mkdirSync(process.env.TRACE_DIR, { recursive: true });
+      const trace = await page.evaluate(() => window.__pushupsTrace ?? []);
+      writeFileSync(join(process.env.TRACE_DIR, `${clip.id}.json`), JSON.stringify({ id: clip.id, source: "browser", frames: trace }));
+    }
     const fpsAvg = fpsSamples.length ? Math.round(fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length) : null;
     const goodOk = stats.good >= clip.good_min - tol && stats.good <= clip.good_max + tol;
     const totalOk = Math.abs(stats.attempts - clip.total) <= tol;

@@ -1,9 +1,11 @@
-"""Run the ORIGINAL Python pipeline (legacy mediapipe.solutions.pose, model_complexity=1, plus the Keras
-form model with the baked scaler) over every clip in tests/fixtures/clips/ground_truth.json and write a
-slim per-frame trace to tests/fixtures/traces/<id>.json: frame, t, shoulderY, prob, features (36).
-tests/corpus.test.ts replays these through the TypeScript rep counter against the hand-labelled counts,
-so the counter can be tuned in vitest without a browser. Frames are downscaled to 640 px wide (what the
-browser gets from the camera). Needs the .venv described in README "Regenerating the exports".
+"""Run the ORIGINAL Python pose pipeline (legacy mediapipe.solutions.pose, model_complexity=1) over every
+clip in tests/fixtures/clips/ground_truth.json and write a slim per-frame trace to
+tests/fixtures/traces/<id>.json: frame, t, shoulderY, features (36). tests/corpus.test.ts replays these
+(and the browser-recorded tests/fixtures/traces-browser/) through the page's own pipeline against the
+hand-labelled counts, so the tracker can be tuned in vitest without a browser. Frames are downscaled to
+640 px wide (what the browser gets from the camera). Needs the .venv described in the README.
+The legacy Keras probability is no longer written (the classifier was retrained on the site's own
+landmarks, scripts/train_form_model.py); traces made before 2026-09-19 still carry a `prob` field.
 
 usage: .venv/bin/python scripts/make_traces.py [clip-id ...]   (default: every clip)
 """
@@ -11,13 +13,10 @@ import json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 os.chdir(os.path.join(HERE, ".."))
-import cv2, numpy as np, mediapipe as mp
-from keras_model import build_model
+import cv2, mediapipe as mp
 
 gt = json.load(open("tests/fixtures/clips/ground_truth.json"))
 wanted = set(sys.argv[1:])
-scaler = json.load(open("scripts/scaler.json")); MEAN, SCALE = np.array(scaler["mean"]), np.array(scaler["scale"])
-model = build_model()
 mp_pose = mp.solutions.pose
 L = mp_pose.PoseLandmark
 K = [L.LEFT_WRIST, L.RIGHT_WRIST, L.LEFT_ELBOW, L.RIGHT_ELBOW, L.LEFT_SHOULDER, L.RIGHT_SHOULDER,
@@ -47,12 +46,9 @@ for clip in gt["clips"]:
         i += 1
     cap.release(); pose.close()
     det = [f for f in frames if f["features"]]
-    if det:
-        X = np.array([f["features"] for f in det], dtype=np.float32)
-        for f, p in zip(det, model.predict((X - MEAN) / SCALE, verbose=0)[:, 0]): f["prob"] = round(float(p), 4)
     out = f"tests/fixtures/traces/{clip['id']}.json"
     json.dump({"id": clip["id"], "source": os.path.basename(path), "fps": fps, "width": 640,
-               "generator": "scripts/make_traces.py (legacy mediapipe.solutions.pose 0.10.14, model_complexity=1; Keras pushup_model_augmented.h5 with the baked scaler)",
+               "generator": "scripts/make_traces.py (legacy mediapipe.solutions.pose 0.10.14, model_complexity=1)",
                "frames": frames}, open(out, "w"), separators=(",", ":"))
     print(f"{out}: {i} frames @ {fps:.2f} fps, {len(det)} with a pose")
 print("ALLDONE")

@@ -22,7 +22,7 @@ export async function loadPoseLandmarker(): Promise<PoseLandmarker> {
       return await PoseLandmarker.createFromOptions(vision, {
         baseOptions: { modelAssetPath: "/models/pose_landmarker_full.task", delegate },
         runningMode: "VIDEO",
-        numPoses: 1,
+        numPoses: 2, // a second body is reported so the overlay can say "one person"; the biggest body is tracked
         minPoseDetectionConfidence: 0.5,
         minPosePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as tf from "@tensorflow/tfjs";
-import { createClassifier } from "../src/classifier";
+import { createClassifier, INPUTS } from "../src/classifier";
 import { MEAN, SCALE, scale } from "../src/scaler";
-import video3 from "./fixtures/test_video3_0-160.json";
-import video2 from "./fixtures/test_video_2_1000-1408.json";
+import probs from "./fixtures/form_v2_probs.json";
 
 // Load the converted TF.js model from disk (the browser fetches /models/form/model.json instead).
 async function loadFromDisk() {
@@ -20,27 +19,30 @@ async function loadFromDisk() {
   return createClassifier(handler);
 }
 
-describe("classifier (TF.js port of pushup_model_augmented.h5)", () => {
-  it("scaler constants have 36 entries and scale() standardises", () => {
-    expect(MEAN).toHaveLength(36);
-    expect(SCALE).toHaveLength(36);
-    expect(scale([...MEAN])).toEqual(new Array(36).fill(0));
+describe("classifier v2 (TF.js port of scripts/form_v2.h5)", () => {
+  it("scaler constants have 24 entries and scale() standardises", () => {
+    expect(MEAN).toHaveLength(INPUTS);
+    expect(SCALE).toHaveLength(INPUTS);
+    expect(scale([...MEAN])).toEqual(new Array(INPUTS).fill(0));
   });
 
-  it("reproduces the Keras probabilities (scaled inputs) on both fixtures within 1e-4", async () => {
+  it("reproduces the Keras probabilities on the held-out fixture within 1e-4", async () => {
     const clf = await loadFromDisk();
-    let n = 0;
     let maxDiff = 0;
-    for (const fx of [video3, video2]) {
-      for (const f of fx.frames) {
-        if (!f.features || f.prob == null) continue;
-        const p = clf.predict(scale(f.features));
-        maxDiff = Math.max(maxDiff, Math.abs(p - f.prob));
-        expect(p).toBeCloseTo(f.prob, 4);
-        n++;
-      }
+    for (const f of probs.frames) {
+      const p = clf.predict(scale(f.features));
+      maxDiff = Math.max(maxDiff, Math.abs(p - f.prob));
+      expect(p).toBeCloseTo(f.prob, 4);
     }
-    console.log(`classifier: ${n} frames compared, max |tfjs - keras| = ${maxDiff.toExponential(2)}`);
-    expect(n).toBeGreaterThan(500);
+    console.log(`classifier: ${probs.frames.length} frames compared, max |tfjs - keras| = ${maxDiff.toExponential(2)}`);
+    expect(probs.frames.length).toBeGreaterThanOrEqual(50);
+    clf.dispose();
+  });
+
+  it("separates the held-out good and bad frames well above chance", async () => {
+    const clf = await loadFromDisk();
+    const right = probs.frames.filter((f) => (clf.predict(scale(f.features)) > 0.5) === f.label > 0.5).length;
+    expect(right / probs.frames.length).toBeGreaterThanOrEqual(0.85);
+    clf.dispose();
   });
 });

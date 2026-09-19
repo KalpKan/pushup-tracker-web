@@ -37,6 +37,8 @@ async function start(mode: Mode) {
   formEl.textContent = "–";
   fpsEl.textContent = "–";
   stage.classList.add("live");
+  // On a phone the header and buttons push the stage below the fold; bring the video and the tiles into view.
+  if (window.innerWidth <= 480) stage.scrollIntoView({ block: "start", behavior: "smooth" });
   try {
     const { startSession } = await import("./session");
     session = await startSession({
@@ -47,18 +49,19 @@ async function start(mode: Mode) {
       onRep: (ev) => {
         goodEl.textContent = String(ev.goodReps);
         totalEl.textContent = String(ev.totalReps);
-        capture("rep_counted", { good: ev.good });
+        capture("rep_counted", { good: ev.good, reason: ev.reason });
       },
-      onFrame: (st, prob, fps) => {
+      onFrame: (st, verdict, fps) => {
         goodEl.textContent = String(st.goodReps);
         totalEl.textContent = String(st.totalReps);
-        formEl.textContent = prob == null ? "no pose" : prob > 0.5 ? `good ${Math.round(prob * 100)}%` : `bad ${Math.round((1 - prob) * 100)}%`;
+        formEl.textContent = verdict == null ? "no pose" : verdict.good ? "good" : `bad: ${verdict.reason ?? "unsure"}`;
         fpsEl.textContent = fps ? `${fps} fps` : "–";
       },
       onEnd: () => {
+        const result = `${goodEl.textContent} good of ${totalEl.textContent}`;
         session = null;
         setButtons(false);
-        setStatus("Clip finished. Play it again or start your camera.");
+        setStatus(`Clip finished: ${result}. Play it again or start your camera.`);
       },
     });
     capture("session_started", { mode });
@@ -86,7 +89,9 @@ stopBtn.addEventListener("click", () => {
   session?.stop();
   session = null;
   setButtons(false);
-  setStatus("Stopped.");
+  setStatus(`Stopped: ${goodEl.textContent} good rep${goodEl.textContent === "1" ? "" : "s"} of ${totalEl.textContent} attempt${totalEl.textContent === "1" ? "" : "s"}.`);
+  formEl.textContent = "–";
+  fpsEl.textContent = "–";
 });
 
 if (!navigator.mediaDevices?.getUserMedia) {

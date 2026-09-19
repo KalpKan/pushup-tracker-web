@@ -6,7 +6,7 @@ import posthog from "posthog-js";
  * autocapture on, inputs masked. Three custom events, none of which ever carries a frame or a
  * landmark:
  *   session_started    { mode: "camera" | "demo" }
- *   rep_counted        { good: boolean }
+ *   rep_counted        { good: boolean, reason: string | null }  (reason = why the rep was bad; never landmarks or images)
  *   demo_video_played  {}
  * Without VITE_PUBLIC_POSTHOG_KEY (local dev, a fork) every call is a silent no-op.
  */
@@ -29,7 +29,7 @@ export function initAnalytics(key: string | undefined = import.meta.env.VITE_PUB
 
 type Events = {
   session_started: { mode: "camera" | "demo" };
-  rep_counted: { good: boolean };
+  rep_counted: { good: boolean; reason: string | null };
   demo_video_played: Record<string, never>;
 };
 

@@ -27,9 +27,11 @@ bad), which is what the one-pager and the `data/good_form` / `data/bad_form` tra
 
 Three ways the corpus is used:
 
-1. `tests/corpus.test.ts` replays `../traces/<id>.json` (the Python MediaPipe landmarks + Keras probability
-   per frame, `scripts/make_traces.py`) through `src/repCounter.ts`. Fast, no browser; report-only until
-   `PUSHUPS_CORPUS_GATE=1`.
+1. `tests/corpus.test.ts` replays `../traces/<id>.json` (the legacy Python MediaPipe landmarks per frame,
+   `scripts/make_traces.py`) and `../traces-browser/<id>.json` (the site's own MediaPipe Tasks landmarks,
+   recorded in headless Chrome with `TRACE_DIR=… scripts/e2e-corpus.mjs`) through the page's pipeline
+   (`src/tracker.ts` with the classifier). Fast, no browser; a clip outside the tolerance fails `npm test`
+   (one known miss is marked `it.fails` in the test with its reason).
 2. `scripts/e2e-corpus.mjs` feeds each clip to Chrome's fake camera (`scripts/make-mjpeg.mjs` first) and
    reads the counts off the live page: the real pipeline (MediaPipe in WASM/WebGL, TF.js, canvas) at
    real-time speed. This is the number that has to meet the bar.

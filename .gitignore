@@ -11,3 +11,5 @@ scripts/pushup_form_keras2.h5
 .DS_Store
 tests/fixtures/clips/.mjpeg/
 tests/fixtures/results/
+tests/fixtures/training/
+scripts/form_v2.h5

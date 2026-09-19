@@ -1,9 +1,12 @@
 /**
- * Form classifier: the TF.js conversion of pushup_model_augmented.h5 (Sequential 36->128->64->32->1,
- * ReLU/sigmoid, 15 105 parameters), run on the CPU backend. Inputs must already be standardised
- * with scale() from ./scaler. Output is P(good form) for one frame.
+ * Form classifier v2: the TF.js conversion of scripts/form_v2.h5 (Sequential 24->32->16->1, ReLU/sigmoid,
+ * trained by scripts/train_form_model.py on the site's own MediaPipe Tasks landmarks), run on the CPU
+ * backend. Inputs are the 24 features of ./formFeatures, standardised with scale() from ./scaler. Output
+ * is P(good form) for one frame; the tracker consults it at the bottom of a rep only (see ./form).
  */
 import * as tf from "@tensorflow/tfjs";
+
+export const INPUTS = 24;
 
 export interface Classifier {
   predict(scaledVector: readonly number[]): number;
@@ -18,7 +21,7 @@ export async function createClassifier(source: string | tf.io.IOHandler): Promis
   return {
     predict(scaledVector) {
       return tf.tidy(() => {
-        const out = model.predict(tf.tensor2d([Array.from(scaledVector)], [1, 36])) as tf.Tensor;
+        const out = model.predict(tf.tensor2d([Array.from(scaledVector)], [1, INPUTS])) as tf.Tensor;
         return out.dataSync()[0];
       });
     },

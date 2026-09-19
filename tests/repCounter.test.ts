@@ -1,55 +1,111 @@
 import { describe, expect, it } from "vitest";
-import { createRepCounter } from "../src/repCounter";
-import video3 from "./fixtures/test_video3_0-160.json";
-import video2 from "./fixtures/test_video_2_1000-1408.json";
+import { createRepCounter, type RepSample } from "../src/repCounter";
 
-function replay(fixture: { frames: { frame: number; shoulderY: number | null; prob?: number }[] }) {
-  const counter = createRepCounter();
-  const events: { frame: number; good: boolean }[] = [];
-  for (const f of fixture.frames) {
-    if (f.shoulderY == null || f.prob == null) continue;
-    const ev = counter.push({ shoulderY: f.shoulderY, good: f.prob > 0.5 });
-    if (ev) events.push({ frame: f.frame, good: ev.good });
+/** Synthetic shoulder-height wave: top at 0.3, bottom at 0.3 + amp; torso 0.28; plank-like unless said otherwise. */
+function wave(opts: { reps: number; period: number; fps: number; amp?: number; faults?: (t: number) => string[]; bottomFaults?: (t: number) => string[]; hold?: number }) {
+  const { reps, period, fps, amp = 0.3, hold = 0.5 } = opts;
+  const samples: RepSample[] = [];
+  const n = Math.round((hold + reps * period + hold) * fps);
+  for (let i = 0; i < n; i++) {
+    const t = i / fps;
+    const phase = t < hold ? 0 : t > hold + reps * period ? 0 : (t - hold) % period;
+    const y = 0.3 + amp * (1 - Math.cos((2 * Math.PI * phase) / period)) / 2;
+    samples.push({ t, shoulderY: y, scale: 0.28, plank: true, faults: opts.faults?.(t) ?? [], bottomFaults: opts.bottomFaults?.(t) ?? [] });
   }
-  return { events, state: counter.state() };
+  return samples;
 }
 
-describe("createRepCounter (port of test_pushup_form.py)", () => {
-  it("counts a synthetic top-bottom-top wave with good form as good reps", () => {
-    const counter = createRepCounter();
-    let good = 0;
-    // 10 warm-up frames are skipped by the original, so give it 3 slow reps of 40 frames each.
-    for (let i = 0; i < 120; i++) {
-      const y = 0.4 + 0.2 * (1 - Math.cos((2 * Math.PI * i) / 40)) / 2; // 0.4 at top, 0.6 at bottom
-      const ev = counter.push({ shoulderY: y, good: true });
-      if (ev?.good) good++;
+function run(samples: RepSample[]) {
+  const c = createRepCounter();
+  const events = [];
+  for (const s of samples) {
+    const ev = c.push(s);
+    if (ev && ev.kind === "rep") events.push(ev);
+  }
+  return { events, ...c.state() };
+}
+
+describe("createRepCounter (time-based, body-scaled)", () => {
+  it("counts every rep of a clean set, including the first, as good", () => {
+    const r = run(wave({ reps: 5, period: 1.2, fps: 30 }));
+    expect(r.totalReps).toBe(5);
+    expect(r.goodReps).toBe(5);
+  });
+
+  it("gives the same count at 30, 15 and 10 fps for fast reps (0.7 s)", () => {
+    for (const fps of [30, 15, 10]) {
+      const r = run(wave({ reps: 6, period: 0.7, fps }));
+      expect(r.totalReps, `${fps} fps`).toBe(6);
     }
-    expect(good).toBeGreaterThanOrEqual(2);
-    expect(counter.state().goodReps).toBe(good);
-    expect(counter.state().totalReps).toBe(good);
   });
 
-  it("does not count a rep when the form was bad at the bottom", () => {
-    const counter = createRepCounter();
-    for (let i = 0; i < 120; i++) {
-      const y = 0.4 + 0.2 * (1 - Math.cos((2 * Math.PI * i) / 40)) / 2;
-      counter.push({ shoulderY: y, good: y < 0.5 }); // bad whenever low
+  it("does not count a partial dip (a third of the range) but reports it as a partial", () => {
+    const full = wave({ reps: 2, period: 1.2, fps: 30 });
+    const partial = wave({ reps: 1, period: 1.2, fps: 30, amp: 0.1, hold: 0 }).map((s) => ({ ...s, t: s.t + full[full.length - 1].t + 1 / 30 }));
+    const c = createRepCounter();
+    const kinds: string[] = [];
+    for (const s of [...full, ...partial]) {
+      const ev = c.push(s);
+      if (ev) kinds.push(ev.kind);
     }
-    expect(counter.state().goodReps).toBe(0);
-    expect(counter.state().totalReps).toBeGreaterThanOrEqual(2);
+    expect(c.state().totalReps).toBe(2);
+    expect(kinds).toEqual(["rep", "rep", "partial"]);
   });
 
-  it("matches the Python state machine on test_video3 frames 0-160 (2 good reps)", () => {
-    const { events, state } = replay(video3);
-    expect(events).toEqual(video3.events);
-    expect(state.goodReps).toBe(video3.goodReps);
-    expect(state.totalReps).toBe(video3.totalReps);
+  it("does not count a rise that starts at the bottom (no top seen first)", () => {
+    const s = wave({ reps: 2, period: 1.2, fps: 30, hold: 0 });
+    // Start half a period in: the first sample is the bottom.
+    const fromBottom = s.filter((x) => x.t >= 0.6).map((x) => ({ ...x, t: x.t - 0.6 }));
+    const r = run(fromBottom);
+    expect(r.totalReps).toBe(1);
   });
 
-  it("matches the Python state machine on test_video_2 frames 1000-1408 (1 bad rep)", () => {
-    const { events, state } = replay(video2);
-    expect(events).toEqual(video2.events);
-    expect(state.goodReps).toBe(video2.goodReps);
-    expect(state.totalReps).toBe(video2.totalReps);
+  it("ignores frames that are not plank-like for the top (standing up before and after)", () => {
+    const s = wave({ reps: 2, period: 1.2, fps: 30, hold: 1 });
+    // Standing: shoulders far above the plank, not plank-like.
+    const standing = (t0: number) => Array.from({ length: 30 }, (_, i) => ({ t: t0 + i / 30, shoulderY: 0.05, scale: 0.28, plank: false, faults: [], bottomFaults: [] }));
+    const r = run([...standing(-1), ...s, ...standing(s[s.length - 1].t + 1 / 30)]);
+    expect(r.totalReps).toBe(2);
+  });
+
+  it("does not turn a drop onto the knees (non-plank frames) into a rep", () => {
+    const s = wave({ reps: 1, period: 1.2, fps: 30, hold: 1 });
+    // After the rep: shoulders drop 0.3 (a full rep's depth) while kneeling, then back up.
+    const t0 = s[s.length - 1].t + 1 / 30;
+    const kneel = Array.from({ length: 36 }, (_, i) => {
+      const y = 0.3 + 0.3 * (1 - Math.cos((2 * Math.PI * i) / 36)) / 2;
+      return { t: t0 + i / 30, shoulderY: y, scale: 0.28, plank: false, faults: ["knees down"], bottomFaults: [] };
+    });
+    const r = run([...s, ...kneel]);
+    expect(r.totalReps).toBe(1);
+  });
+
+  it("judges each end on the majority of its frames, not a single one", () => {
+    // One noisy 'bad' frame at the very bottom of every rep must not flip the verdict.
+    const r = run(wave({ reps: 3, period: 1.2, fps: 30, bottomFaults: (t) => (Math.abs(((t - 0.5) % 1.2) - 0.6) < 0.02 ? ["keep your body straight"] : []) }));
+    expect(r.goodReps).toBe(3);
+  });
+
+  it("ignores single-frame landmark spikes at the top and at the bottom", () => {
+    for (const fps of [30, 10]) {
+      const s = wave({ reps: 4, period: 1.0, fps, hold: 1 });
+      // A spike during the first hold (shoulders 'jump' to the bottom for one frame) and one at the second rep's bottom (deeper).
+      const spiked = s.map((x) => (Math.abs(x.t - 0.5) < 0.5 / fps ? { ...x, shoulderY: 0.9 } : Math.abs(x.t - 2.5) < 0.5 / fps ? { ...x, shoulderY: 0.95 } : x));
+      const r = run(spiked);
+      expect(r.totalReps, `${fps} fps`).toBe(4);
+      expect(r.goodReps, `${fps} fps`).toBe(4);
+    }
+  });
+
+  it("reports the reason of a bad rep", () => {
+    const r = run(wave({ reps: 2, period: 1.2, fps: 30, faults: (t) => (t > 0.5 + 1.2 ? ["hips sagging"] : []) }));
+    expect(r.totalReps).toBe(2);
+    expect(r.goodReps).toBe(1);
+    expect(r.events[1].reason).toBe("hips sagging");
+  });
+
+  it("scales the minimum depth with the body: a rep of 0.35 torso counts, 0.15 torso does not", () => {
+    expect(run(wave({ reps: 3, period: 1.2, fps: 30, amp: 0.28 * 0.35 })).totalReps).toBe(3);
+    expect(run(wave({ reps: 3, period: 1.2, fps: 30, amp: 0.28 * 0.15 })).totalReps).toBe(0);
   });
 });

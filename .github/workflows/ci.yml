@@ -17,9 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      # Unit tests: TF.js classifier vs Keras fixtures, rep counter vs the Python state machine, and the
-      # hand-labelled corpus (report-only until PUSHUPS_CORPUS_GATE=1 is set here, see tests/corpus.test.ts).
+      # Unit tests: counter, form rules, hints, classifier v2 vs Keras, and the hand-labelled corpus gate
+      # (tests/corpus.test.ts, both the Python and the browser-recorded landmark traces; a miss fails).
       - run: npx vitest run --pool=forks --maxWorkers=1
-        env:
-          PUSHUPS_CORPUS_GATE: ${{ vars.PUSHUPS_CORPUS_GATE || '0' }}
       - run: npm run build

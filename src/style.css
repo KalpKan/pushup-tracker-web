@@ -38,4 +38,6 @@ button[hidden] { display: none; }
 @media (max-width: 480px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
   .buttons button { flex: 1 1 100%; }
+  /* Portrait phone: keep the video and the four tiles on one screen once a session runs (D12). */
+  .stage.live canvas { max-height: 52vh; object-fit: contain; }
 }
