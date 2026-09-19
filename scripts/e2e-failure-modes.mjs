@@ -6,8 +6,14 @@
 //   (the v1 files: git show 4f0708e:public/models/form/model.json, ...group1-shard1of1.bin)
 import puppeteer from "puppeteer-core";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 const [url, v1, out] = process.argv.slice(2);
+// The versioned model path the code fetches (src/classifier.ts MODEL_URL), read from the source so this script
+// cannot go stale when the model is bumped (it did once: it intercepted the v2 path while the page fetched v3).
+const MODEL_URL = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../src/classifier.ts"), "utf8").match(/MODEL_URL = "([^"]+)"/)[1];
+const MODEL_DIR = MODEL_URL.replace(/model\.json$/, "");
+console.log(`model path under test: ${MODEL_URL}`);
 async function run(name, setup) {
   const browser = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: true, ignoreDefaultArgs: ["--enable-automation"],
     args: ["--disable-blink-features=AutomationControlled", "--use-gl=angle", "--use-angle=metal", "--autoplay-policy=no-user-gesture-required", "--window-size=1000,1400"] });
@@ -31,8 +37,8 @@ await run("stale-v1-model", async (page, modelRequests) => {
   page.on("request", (r) => {
     const p = new URL(r.url()).pathname;
     if (p.startsWith("/models/form")) modelRequests.push(`${p} cache=${r.headers()["cache-control"] ?? "-"}`);
-    if (p === "/models/form-v2/model.json") return r.respond({ status: 200, contentType: "application/json", body: readFileSync(join(v1, "model.json")) });
-    if (p === "/models/form-v2/group1-shard1of1.bin") return r.respond({ status: 200, contentType: "application/octet-stream", body: readFileSync(join(v1, "group1-shard1of1.bin")) });
+    if (p === MODEL_URL) return r.respond({ status: 200, contentType: "application/json", body: readFileSync(join(v1, "model.json")) });
+    if (p === `${MODEL_DIR}group1-shard1of1.bin`) return r.respond({ status: 200, contentType: "application/octet-stream", body: readFileSync(join(v1, "group1-shard1of1.bin")) });
     r.continue();
   });
 });
@@ -43,8 +49,8 @@ await run("stale-then-fresh", async (page, modelRequests) => {
   page.on("request", (r) => {
     const p = new URL(r.url()).pathname;
     if (p.startsWith("/models/form")) modelRequests.push(`${p} n=${++n}`);
-    if (p === "/models/form-v2/model.json" && n <= 1) return r.respond({ status: 200, contentType: "application/json", body: readFileSync(join(v1, "model.json")) });
-    if (p === "/models/form-v2/group1-shard1of1.bin" && n <= 2) return r.respond({ status: 200, contentType: "application/octet-stream", body: readFileSync(join(v1, "group1-shard1of1.bin")) });
+    if (p === MODEL_URL && n <= 1) return r.respond({ status: 200, contentType: "application/json", body: readFileSync(join(v1, "model.json")) });
+    if (p === `${MODEL_DIR}group1-shard1of1.bin` && n <= 2) return r.respond({ status: 200, contentType: "application/octet-stream", body: readFileSync(join(v1, "group1-shard1of1.bin")) });
     r.continue();
   });
 });
