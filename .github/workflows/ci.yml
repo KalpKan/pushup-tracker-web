@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # Unit tests: TF.js classifier vs Keras fixtures, rep counter vs the Python state machine, and the
+      # hand-labelled corpus (report-only until PUSHUPS_CORPUS_GATE=1 is set here, see tests/corpus.test.ts).
+      - run: npx vitest run --pool=forks --maxWorkers=1
+        env:
+          PUSHUPS_CORPUS_GATE: ${{ vars.PUSHUPS_CORPUS_GATE || '0' }}
+      - run: npm run build

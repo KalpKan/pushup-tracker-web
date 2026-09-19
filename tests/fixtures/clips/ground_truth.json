@@ -1,0 +1,343 @@
+{
+  "$comment": "Ground truth for the pushup rep counter, labelled by hand on 2026-09-18 by the Phase 5 SPEC agent from frame contact sheets (4 fps, plus the Python shoulder-height trace as an aid; the counts come from the frames). One entry per clip. `reps` lists every completed top -> bottom -> top cycle with the time of its lowest point. `form` is judged against the definition in `definition`. `confidence` = high when the frames leave no doubt, medium when a reasonable coach could disagree. Acceptance: `total` within +/-1 (see `total_tolerance`), and the app's good-rep count within [good_min - 1, good_max + 1]. `not_reps` are movements that must NOT be counted. Clips with `committed: false` are personal recordings kept outside the repo (absolute path on Kalp's Mac).",
+  "definition": {
+    "rep": "One top -> bottom -> top cycle of the shoulders. The clip must reach a top (plank, arms straight) before the first counted bottom; a clip that starts mid-descent does not get that rep. A dip shallower than about half the person's full range is a partial and is not a rep.",
+    "good_form": "Straight line from shoulders through hips to ankles at the top AND at the bottom (no hip sag, no arched lower back, no piked hips), chest near the floor at the bottom, arms straight at the top. This is what the one-pager calls 'form quality based on body position' and what the training clips in data/good_form show.",
+    "bad_form": "Any of: hips sagging or lower back arched (the 'worm', hips lagging the chest on the way up), hips piked up (downward-dog shape), knees on the floor, resting the hips on the floor then pushing the chest up first, partial depth counted as a rep. This is what data/bad_form shows.",
+    "source_of_definition": "One-pager 'AI-Powered Pushup Form Tracker' (Kalp Kansara & Yash Panchal): 'Instant feedback on form quality based on body position', 'Repetition counting with form validation', 'detect valid pushup repetitions based on timing and the top-of-rep form'; plus the labelled training folders data/good_form and data/bad_form in ~/Desktop/Out and About/Sidequest/AI_Pushup_Tracking."
+  },
+  "total_tolerance": 1,
+  "clips": [
+    {
+      "id": "demo",
+      "path": "public/demo/pushups.mp4",
+      "committed": true,
+      "source": "public/demo/pushups.mp4 = test_video3.mp4 trimmed to 0-8.5 s (the bundled demo clip)",
+      "sha256_16": "9475177ab8299171",
+      "person": "Kalp",
+      "duration_s": 8.5,
+      "camera": "side-on, phone at floor level, whole body in frame, 640x360",
+      "reps": [
+        { "n": 1, "bottom_s": 0.8, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 1.8, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 3.5, "form": "good", "confidence": "medium", "note": "rests at the bottom 3.0-4.0 s with a straight body, rises straight at 4.3" },
+        { "n": 4, "bottom_s": 6.2, "form": "bad", "confidence": "high", "note": "lies on the floor 5.5-6.5 s, chest comes up before the hips (worm) at 6.75" }
+      ],
+      "not_reps": [],
+      "total": 4,
+      "good_min": 2,
+      "good_max": 3
+    },
+    {
+      "id": "test_video3",
+      "path": "tests/fixtures/clips/test_video3.mp4",
+      "committed": true,
+      "source": "AI-Pushup-Form-Tracker/test_video/test_video3.mp4 (was public in KalpKan/AI-Pushup-Form-Tracker before the data purge; the Python script's own test video), 1280x720 60 fps",
+      "sha256_16": "6512833b854766f4",
+      "person": "Kalp",
+      "duration_s": 13.57,
+      "camera": "side-on, phone at floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 0.8, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 1.8, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 3.5, "form": "good", "confidence": "medium", "note": "bottom hold 3.0-4.0 s, straight body" },
+        { "n": 4, "bottom_s": 6.2, "form": "bad", "confidence": "high", "note": "lies on the floor 5.5-6.5 s, worm ascent at 6.75" },
+        { "n": 5, "bottom_s": 9.8, "form": "good", "confidence": "medium", "note": "chest to floor, straight; the classifier calls the bottom bad" }
+      ],
+      "not_reps": [{ "t": "11.0-13.6", "what": "gets up onto the knees and stands (shoulders rise far above the plank top)" }],
+      "total": 5,
+      "good_min": 2,
+      "good_max": 4
+    },
+    {
+      "id": "test_video",
+      "path": "tests/fixtures/clips/test_video.mp4",
+      "committed": true,
+      "source": "AI-Pushup-Form-Tracker/test_video/test_video.mp4, 1280x720 60 fps",
+      "sha256_16": "56d015c68b1d13a8",
+      "person": "Kalp",
+      "duration_s": 16.9,
+      "camera": "side-on, phone at floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 3.5, "form": "bad", "confidence": "high", "note": "hips sag on the way down (2.0-3.0), worm ascent 4.25-5.0" },
+        { "n": 2, "bottom_s": 9.5, "form": "bad", "confidence": "high", "note": "lies on the floor 9.0-9.75 with hips down, chest rises first" },
+        { "n": 3, "bottom_s": 13.5, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 15.0, "form": "good", "confidence": "high" }
+      ],
+      "not_reps": [{ "t": "5.5-6.5", "what": "small shoulder wobble at the top (y 0.27-0.31), not a rep" }],
+      "total": 4,
+      "good_min": 2,
+      "good_max": 2
+    },
+    {
+      "id": "test_video_2",
+      "path": "tests/fixtures/clips/test_video_2.mp4",
+      "committed": true,
+      "source": "AI-Pushup-Form-Tracker/test_video/test_video_2.mp4, 1280x720 60 fps",
+      "sha256_16": "e9d36606b35f1538",
+      "person": "Kalp",
+      "duration_s": 23.47,
+      "camera": "side-on, phone at floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 2.5, "form": "good", "confidence": "medium", "note": "goes all the way down and lies flat 2.0-2.75 with a straight body, rises straight" },
+        { "n": 2, "bottom_s": 8.5, "form": "bad", "confidence": "high", "note": "hips sag, worm" },
+        { "n": 3, "bottom_s": 15.9, "form": "bad", "confidence": "high", "note": "knee pushup (knees on the floor 12-19 s)" },
+        { "n": 4, "bottom_s": 21.5, "form": "good", "confidence": "medium", "note": "lies flat 21.3-21.9 then rises straight; the classifier calls the bottom bad" }
+      ],
+      "not_reps": [
+        { "t": "10.0-11.5", "what": "downward-dog / pike, hips high" },
+        { "t": "11.5-14.5", "what": "kneels, rocks on the knees (shoulders 0.40-0.47)" },
+        { "t": "17.0-19.5", "what": "moves from knees back to a plank" }
+      ],
+      "total": 4,
+      "good_min": 0,
+      "good_max": 2
+    },
+    {
+      "id": "test_video_4",
+      "path": "tests/fixtures/clips/test_video_4.mp4",
+      "committed": true,
+      "source": "AI-Pushup-Form-Tracker/test_video/test_video_4.mp4, 1280x720 60 fps, recorded with the phone upside down (displaymatrix rotation -180; the fixture has the rotation baked in, a browser applies it when playing the original)",
+      "sha256_16": "160263e4bb47ba54",
+      "person": "Kalp",
+      "duration_s": 12.68,
+      "camera": "side-on, floor level, whole body in frame; the original file carries 180-degree rotation metadata",
+      "reps": [
+        { "n": 1, "bottom_s": 1.7, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 3.4, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 4.9, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 6.5, "form": "good", "confidence": "high" },
+        { "n": 5, "bottom_s": 10.0, "form": "bad", "confidence": "high", "note": "lies on the floor 9.0-10.75, hips down while the chest is up (cobra) at 10.0" }
+      ],
+      "not_reps": [{ "t": "11.8-12.7", "what": "kneels at the end" }],
+      "total": 5,
+      "good_min": 4,
+      "good_max": 4
+    },
+    {
+      "id": "good_IMG_4378",
+      "path": "tests/fixtures/clips/good_IMG_4378.mp4",
+      "committed": true,
+      "source": "data/good_form/IMG_4378.mp4 (training clip, label good), 1920x1080 60 fps HDR",
+      "sha256_16": "11fb606c958f1595",
+      "person": "Kalp",
+      "duration_s": 16.25,
+      "camera": "side-on, floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 1.0, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 2.8, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 4.8, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 6.9, "form": "good", "confidence": "high" },
+        { "n": 5, "bottom_s": 8.8, "form": "good", "confidence": "high" },
+        { "n": 6, "bottom_s": 10.7, "form": "good", "confidence": "high" },
+        { "n": 7, "bottom_s": 12.7, "form": "good", "confidence": "high" },
+        { "n": 8, "bottom_s": 14.6, "form": "good", "confidence": "high" }
+      ],
+      "not_reps": [],
+      "total": 8,
+      "good_min": 8,
+      "good_max": 8
+    },
+    {
+      "id": "good_IMG_4409",
+      "path": "tests/fixtures/clips/good_IMG_4409.mp4",
+      "committed": true,
+      "source": "data/good_form/IMG_4409.mp4 (training clip, label good), 1920x1080 60 fps HDR",
+      "sha256_16": "ebddc8863fba45df",
+      "person": "Kalp",
+      "duration_s": 10.45,
+      "camera": "side-on, floor level, whole body in frame; starts with a 0.6 s hold at the top",
+      "reps": [
+        { "n": 1, "bottom_s": 2.0, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 3.9, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 5.7, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 7.5, "form": "good", "confidence": "high" },
+        { "n": 5, "bottom_s": 9.5, "form": "good", "confidence": "high" }
+      ],
+      "not_reps": [],
+      "total": 5,
+      "good_min": 5,
+      "good_max": 5
+    },
+    {
+      "id": "bad_IMG_4456",
+      "path": "tests/fixtures/clips/bad_IMG_4456.mp4",
+      "committed": true,
+      "source": "data/bad_form/IMG_4456.mp4 (training clip, label bad: hips sag, lower back arched at the bottom), 1920x1080 60 fps HDR",
+      "sha256_16": "0f241702139535f0",
+      "person": "Kalp",
+      "duration_s": 6.38,
+      "camera": "side-on, floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 0.8, "form": "bad", "confidence": "high" },
+        { "n": 2, "bottom_s": 2.2, "form": "bad", "confidence": "high" },
+        { "n": 3, "bottom_s": 3.6, "form": "bad", "confidence": "high" },
+        { "n": 4, "bottom_s": 5.1, "form": "bad", "confidence": "high" }
+      ],
+      "not_reps": [],
+      "total": 4,
+      "good_min": 0,
+      "good_max": 0
+    },
+    {
+      "id": "bad_IMG_4470",
+      "path": "tests/fixtures/clips/bad_IMG_4470.mp4",
+      "committed": true,
+      "source": "data/bad_form/IMG_4470.mp4 (training clip, label bad: hips sag throughout, partial lockout), 1920x1080 60 fps HDR",
+      "sha256_16": "3046fcf037b67a35",
+      "person": "Kalp",
+      "duration_s": 7.8,
+      "camera": "side-on, floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 0.9, "form": "bad", "confidence": "high" },
+        { "n": 2, "bottom_s": 2.2, "form": "bad", "confidence": "high", "note": "the top before it (1.5 s) is only ~80 % of the way up; counting 3 reps is also acceptable" },
+        { "n": 3, "bottom_s": 3.8, "form": "bad", "confidence": "high" },
+        { "n": 4, "bottom_s": 5.5, "form": "bad", "confidence": "high" }
+      ],
+      "not_reps": [{ "t": "7.5-7.8", "what": "stands up at the end" }],
+      "total": 4,
+      "good_min": 0,
+      "good_max": 0
+    },
+    {
+      "id": "bad_IMG_4451",
+      "path": "tests/fixtures/clips/bad_IMG_4451.mp4",
+      "committed": true,
+      "source": "data/bad_form/Copy of IMG_4451.mp4 (training clip, label bad: collapses onto the floor at the bottom, chest up first), 1920x1080 60 fps HDR",
+      "sha256_16": "ad41c2ccb15c97c5",
+      "person": "Kalp",
+      "duration_s": 7.83,
+      "camera": "side-on, floor level, whole body in frame",
+      "reps": [
+        { "n": 1, "bottom_s": 1.3, "form": "bad", "confidence": "high" },
+        { "n": 2, "bottom_s": 2.8, "form": "bad", "confidence": "high" },
+        { "n": 3, "bottom_s": 4.6, "form": "bad", "confidence": "high" },
+        { "n": 4, "bottom_s": 6.4, "form": "bad", "confidence": "high" }
+      ],
+      "not_reps": [],
+      "total": 4,
+      "good_min": 0,
+      "good_max": 0
+    },
+    {
+      "id": "IMG_1305",
+      "path": "/Users/kalp/Desktop/Out and About/Sidequest/AI_Pushup_Tracking/Pushup Test Videos/IMG_1305.mp4",
+      "committed": false,
+      "source": "Pushup Test Videos/IMG_1305.mp4 (2025-01-08), 1920x1080 30 fps. Not committed: a different person, with a second person seated in the background",
+      "sha256_16": "3befed631af7da62",
+      "person": "other (not Kalp)",
+      "duration_s": 8.68,
+      "camera": "side-on, phone on the floor very close: feet leave the frame, head near the edge; a second person sits in the background (hard case: the app must track the person doing pushups)",
+      "reps": [
+        { "n": 1, "bottom_s": 0.7, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 2.6, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 3.6, "form": "good", "confidence": "high", "note": "double bounce at the bottom 3.4 and 3.9 s = one rep" },
+        { "n": 4, "bottom_s": 5.1, "form": "good", "confidence": "high" },
+        { "n": 5, "bottom_s": 6.5, "form": "good", "confidence": "high" },
+        { "n": 6, "bottom_s": 7.6, "form": "good", "confidence": "high" }
+      ],
+      "not_reps": [{ "t": "8.3-8.7", "what": "stands up" }],
+      "total": 6,
+      "good_min": 6,
+      "good_max": 6
+    },
+    {
+      "id": "IMG_1359",
+      "path": "/Users/kalp/Desktop/Out and About/Sidequest/AI_Pushup_Tracking/Pushup Test Videos/IMG_1359.mp4",
+      "committed": false,
+      "source": "Pushup Test Videos/IMG_1359.mp4 (2025-01-15), 1920x1080 30 fps. Not committed (personal recording, never public)",
+      "sha256_16": "7c7977fe3e68fb52",
+      "person": "Kalp (probably)",
+      "duration_s": 18.55,
+      "camera": "side-on, phone on the carpet: head and shoulders leave the top of the frame at the top of every rep (hard case: camera too low; the app should say so)",
+      "reps": [
+        { "n": 1, "bottom_s": 1.1, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 7.3, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 8.3, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 9.3, "form": "good", "confidence": "high" },
+        { "n": 5, "bottom_s": 11.2, "form": "good", "confidence": "high" },
+        { "n": 6, "bottom_s": 13.6, "form": "good", "confidence": "high" },
+        { "n": 7, "bottom_s": 15.4, "form": "good", "confidence": "high" },
+        { "n": 8, "bottom_s": 16.4, "form": "good", "confidence": "high" },
+        { "n": 9, "bottom_s": 17.5, "form": "good", "confidence": "high" }
+      ],
+      "not_reps": [
+        { "t": "5.1-5.9", "what": "drops to the knees to rest, shoulders stay high" },
+        { "t": "18.2-18.55", "what": "descending when the clip ends (incomplete)" }
+      ],
+      "total": 9,
+      "good_min": 9,
+      "good_max": 9
+    },
+    {
+      "id": "IMG_1360",
+      "path": "/Users/kalp/Desktop/Out and About/Sidequest/AI_Pushup_Tracking/Pushup Test Videos/IMG_1360.mp4",
+      "committed": false,
+      "source": "Pushup Test Videos/IMG_1360.mp4 (2025-01-15; IMG_1360.MOV is the same take in HEVC), 1920x1080 30 fps. Not committed (personal recording, never public)",
+      "sha256_16": "b25995d46ff36bdf",
+      "person": "Kalp (probably)",
+      "duration_s": 13.63,
+      "camera": "side-on, phone on the carpet, head cut at the top of the frame; slow controlled reps",
+      "reps": [
+        { "n": 1, "bottom_s": 2.0, "form": "good", "confidence": "high" },
+        { "n": 2, "bottom_s": 3.7, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 5.4, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 7.1, "form": "good", "confidence": "high" },
+        { "n": 5, "bottom_s": 10.0, "form": "good", "confidence": "high" },
+        { "n": 6, "bottom_s": 11.5, "form": "good", "confidence": "high" }
+      ],
+      "not_reps": [
+        { "t": "8.4-9.0", "what": "partial dip, about a quarter of the range (must not count)" },
+        { "t": "12.5-13.6", "what": "stands up" }
+      ],
+      "total": 6,
+      "good_min": 6,
+      "good_max": 6
+    },
+    {
+      "id": "IMG_1512",
+      "path": "/Users/kalp/Desktop/Out and About/Sidequest/AI_Pushup_Tracking/Pushup Test Videos/IMG_1512.mp4",
+      "committed": false,
+      "source": "Pushup Test Videos/IMG_1512.mp4 (2025-01-22), 1920x1080 30 fps. Not committed (personal recording, never public)",
+      "sha256_16": "df261e934607d29c",
+      "person": "Kalp (probably)",
+      "duration_s": 34.81,
+      "camera": "side-on in a different room, phone at floor level, head sometimes cut at the top; very slow reps with pauses, then deliberate bad form",
+      "reps": [
+        { "n": 1, "bottom_s": 4.0, "form": "good", "confidence": "high", "note": "rests flat at the bottom 3.5-4.2, straight" },
+        { "n": 2, "bottom_s": 8.0, "form": "good", "confidence": "high" },
+        { "n": 3, "bottom_s": 13.0, "form": "good", "confidence": "high" },
+        { "n": 4, "bottom_s": 21.3, "form": "good", "confidence": "high", "note": "long hold at the top 14-20 s before it" },
+        { "n": 5, "bottom_s": 28.8, "form": "bad", "confidence": "medium", "note": "lies flat 28.3-29.2, then rises into a pike (hips high) 29.9-31.5" },
+        { "n": 6, "bottom_s": 32.6, "form": "bad", "confidence": "high", "note": "pike pushup, head towards the floor with hips up" }
+      ],
+      "not_reps": [
+        { "t": "24.0-25.0", "what": "partial dip (~15 % of range)" },
+        { "t": "26.5-28.0", "what": "partial dip (~25 % of range)" }
+      ],
+      "total": 6,
+      "good_min": 4,
+      "good_max": 4
+    },
+    {
+      "id": "IMG_1513",
+      "path": "/Users/kalp/Desktop/Out and About/Sidequest/AI_Pushup_Tracking/Pushup Test Videos/IMG_1513.mp4",
+      "committed": false,
+      "source": "Pushup Test Videos/IMG_1513.mp4 (2025-01-22), 1920x1080 30 fps. Not committed: a different person",
+      "sha256_16": "8eb0c6b0a36b9af5",
+      "person": "other (not Kalp)",
+      "duration_s": 8.17,
+      "camera": "side-on, floor level; the clip starts at the bottom of a rep; hips piked and knees bending throughout (bad form)",
+      "reps": [
+        { "n": 1, "bottom_s": 5.7, "form": "bad", "confidence": "high", "note": "top at 2.5 -> bottom 5.7 -> top 7.3; hips piked, knees bend" }
+      ],
+      "not_reps": [
+        { "t": "0.0-2.5", "what": "starts at the bottom and rises; no top before it, so not a counted rep" },
+        { "t": "7.7-8.2", "what": "drops to the knees" }
+      ],
+      "total": 1,
+      "good_min": 0,
+      "good_max": 0
+    }
+  ]
+}

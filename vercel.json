@@ -1,12 +1,43 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/ingest/static/:path(.*)", "destination": "https://us-assets.i.posthog.com/static/:path" },
-    { "source": "/ingest/:path(.*)", "destination": "https://us.i.posthog.com/:path" }
+    {
+      "source": "/ingest/static/:path(.*)",
+      "destination": "https://us-assets.i.posthog.com/static/:path"
+    },
+    {
+      "source": "/ingest/:path(.*)",
+      "destination": "https://us.i.posthog.com/:path"
+    }
   ],
   "headers": [
-    { "source": "/models/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
-    { "source": "/wasm/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
-    { "source": "/demo/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] }
-  ]
+    {
+      "source": "/models/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/wasm/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/demo/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    }
+  ],
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- . ':(exclude)tests' ':(exclude).github' ':(exclude)README.md' ':(exclude).gitignore' ':(exclude)scripts/e2e-corpus.mjs' ':(exclude)scripts/e2e-demo.mjs' ':(exclude)scripts/make-mjpeg.mjs' ':(exclude)scripts/make-clips.sh' ':(exclude)scripts/make_traces.py'"
 }

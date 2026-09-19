@@ -36,7 +36,7 @@ npm install          # downloads the libraries (one time)
 npm run dev          # prints a local address such as http://localhost:5173
 ```
 
-Open that address in Chrome or Safari, press **Play demo clip** (no camera needed) or **Start camera**. `npm test` runs the checks against the Python-recorded fixtures.
+Open that address in Chrome or Safari, press **Play demo clip** (no camera needed) or **Start camera**. `npm test` runs the checks against the Python-recorded fixtures and prints how the rep counter does on the labelled clips in `tests/fixtures/clips/`; the same clips can be played into the real camera path with `node scripts/make-mjpeg.mjs && GPU=1 node scripts/e2e-corpus.mjs http://localhost:5173/`.
 
 ## How to deploy this
 
@@ -70,6 +70,11 @@ Names only live here and in `.env.example`; values live only in Vercel.
 | `scripts/export_scaler.py`, `scripts/export_model.sh`, `scripts/make_fixtures.py` | one-off Python exports (need the original repo's data; a Python 3.10 venv with `tensorflow==2.15`, `tensorflowjs`, `mediapipe==0.10.14`, `scikit-learn`) |
 | `scripts/e2e-demo.mjs` | headless-Chrome end-to-end run of the demo clip (`node scripts/e2e-demo.mjs <url>`) |
 | `tests/` | vitest unit tests + Python-generated fixtures |
+| `tests/fixtures/clips/` | 9 real pushup clips with hand-counted reps and form labels (`ground_truth.json`, README there); 5 more personal clips are referenced by path outside the repo |
+| `tests/fixtures/traces/`, `tests/corpus.test.ts` | Python-pipeline landmark traces of every clip, replayed through the rep counter against the ground truth (report-only until `PUSHUPS_CORPUS_GATE=1`) |
+| `scripts/make-mjpeg.mjs`, `scripts/e2e-corpus.mjs` | feed every clip to Chrome's fake camera and compare the on-screen counts with the ground truth (`GPU=1 node scripts/e2e-corpus.mjs <url>`); the consumer-grade test for live counting |
+| `scripts/make-clips.sh`, `scripts/make_traces.py` | rebuild the clips and traces from Kalp's original recordings (only needed when a clip is added) |
+| `.github/workflows/ci.yml` | GitHub Actions: typecheck, vitest (`--pool=forks --maxWorkers=1`), build, on every push and pull request |
 
 ## Regenerating the exports
 
