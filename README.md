@@ -90,9 +90,11 @@ python3.10 -m venv .venv && .venv/bin/pip install tensorflow==2.15 mediapipe==0.
 .venv/bin/python scripts/make_training_landmarks.py            # Python copy of the pose model, ~30 s per clip
 npm run build && npx vite preview --port 4177 --strictPort &   # then the site's own landmarks, both facings, ~20 min on 3 lanes
 node scripts/record-training-landmarks.mjs http://localhost:4177/ --lanes 3
-FEATURES=angles NO_TS=1 OUT=/tmp/exp .venv/bin/python scripts/train_form_model.py   # corpus clips held out (HOLD_OUT=corpus)
+FEATURES=angles OUT=/tmp/exp .venv/bin/python scripts/train_form_model.py   # corpus clips held out (HOLD_OUT=corpus); writes /tmp/exp.h5, _scaler.json, _probs.json, _report.json and nothing else
 FEATURES=angles .venv/bin/python scripts/eval_form_model.py /tmp/exp.h5 /tmp/exp_scaler.json   # verdicts at the labelled bottoms, three trace sets
 ```
+
+Everything these scripts write is an experiment artefact under `OUT=` (git-ignored as `scripts/form_v*`); no page file, model URL or test fixture is touched, because the site's `src/classifier.ts`, `src/formFeatures.ts`, `tests/classifier.test.ts` and `public/models/form-v*/` were deleted with the classifier (`b622fa3`).
 
 Results on 2026-09-19 (high-confidence verdicts, Python / browser / mirrored sets): raw 24 coordinates 51 / 52 / 52 of 68, 18 joint angles 54 / 54 / 54, either with perspective augmentation 47–51; the geometry rules the site ships: 55 / 58 / 57 of 67, consistent across facings and frame rates.
 

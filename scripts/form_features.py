@@ -1,5 +1,6 @@
-"""Per-frame input features of the form classifier, shared by train_form_model.py and eval_form_model.py.
-src/formFeatures.ts computes the same numbers in the browser (tests/classifier.test.ts checks the two agree).
+"""Per-frame input features of the retired form classifier, shared by train_form_model.py and eval_form_model.py.
+Experiment code only: the browser port (src/formFeatures.ts) and the port-fidelity test (tests/classifier.test.ts)
+were removed with the classifier on 2026-09-19 (FIX r3); the site reads nothing from here.
 
 Input: 12 landmarks in the order wrist L/R, elbow L/R, shoulder L/R, hip L/R, knee L/R, ankle L/R, each [x, y, ...]
 in frame-normalised units, plus the frame aspect (width / height): x is multiplied by it so that a horizontal

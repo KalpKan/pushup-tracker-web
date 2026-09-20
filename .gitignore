@@ -12,8 +12,10 @@ scripts/pushup_form_keras2.h5
 tests/fixtures/clips/.mjpeg/
 tests/fixtures/results/
 tests/fixtures/training/
+# Artefacts of the retired classifier experiment (scripts/train_form_model.py, default OUT=scripts/form_v4)
 scripts/form_v*.h5
 scripts/form_v*_scaler.json
 scripts/form_v*_report.json
+scripts/form_v*_probs.json
 tests/fixtures/training-browser/
 scripts/__pycache__/

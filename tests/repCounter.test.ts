@@ -139,3 +139,25 @@ describe("createRepCounter (time-based, body-scaled)", () => {
     expect(run(wave({ reps: 3, period: 1.2, fps: 30, amp: 0.28 * 0.15 })).totalReps).toBe(0);
   });
 });
+
+describe("state().phase (round-4 critique: the Phase union must say what the counter does)", () => {
+  it("reports 'bottom' all the way up until the rep counts, 'ascending' on the counting sample and 'top' after it", () => {
+    const c = createRepCounter();
+    const seen: { t: number; phase: string; rep: boolean }[] = [];
+    for (const s of wave({ reps: 1, period: 1.2, fps: 30 })) {
+      const ev = c.push(s);
+      seen.push({ t: s.t, phase: c.state().phase, rep: ev?.kind === "rep" });
+    }
+    const repAt = seen.findIndex((x) => x.rep);
+    expect(repAt).toBeGreaterThan(0);
+    const bottomAt = seen.findIndex((x) => x.phase === "bottom");
+    expect(bottomAt).toBeGreaterThan(0);
+    expect(bottomAt).toBeLessThan(repAt);
+    // Between the deepest point and the count: only "descending" (going deeper) or "bottom" (coming up
+    // short of RETURN_FRACTION), never "ascending", which would end the rep in the next sample.
+    for (const x of seen.slice(bottomAt, repAt)) expect(["descending", "bottom"], `t=${x.t.toFixed(2)}`).toContain(x.phase);
+    expect(seen[repAt].phase).toBe("ascending");
+    expect(seen[repAt + 1].phase).toBe("top");
+    expect(c.state().totalReps).toBe(1);
+  });
+});

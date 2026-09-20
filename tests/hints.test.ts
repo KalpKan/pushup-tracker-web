@@ -1,7 +1,7 @@
 /** Placement hints from a pose result (pure function, no DOM). */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { createHintDebouncer, HINTS, pausesCounting, placementHint, type HintInput } from "../src/hints";
+import { createHintDebouncer, HINTS, mainFirst, pausesCounting, placementHint, type HintInput } from "../src/hints";
 
 /** Real MediaPipe poses (33 x [x, y, z, visibility]) recorded from the site with ?trace=full (TEST r3 D3, 2026-09-19). */
 const REAL = JSON.parse(readFileSync(new URL("./fixtures/head_edge_poses.json", import.meta.url), "utf8")) as Record<string, number[][]>;
@@ -133,5 +133,40 @@ describe("pausesCounting (D4/D5: which placement problems stop the counter)", ()
   });
   it("does not pause a clean plank", () => {
     expect(pausesCounting(input({}))).toBe(false);
+  });
+});
+
+describe("mainFirst (round-4 critique: the hint and the pause must be judged on the body the counter tracks)", () => {
+  // A bystander far from the camera (0.3x torso, so not a "second person") standing at the top-left with the
+  // head cut off (the 11 face landmarks collapsed to a cluster 8 % beyond the top edge). MediaPipe may list
+  // this body FIRST; session.ts tracks the biggest body (the plank), so the hint input must lead with it.
+  const bystander = () => {
+    const p = plank().map((l) => ({ ...l, x: 0.15 + (l.x - 0.5) * 0.3, y: 0.2 + (l.y - 0.5) * 0.3 }));
+    for (let i = 0; i <= 10; i++) p[i] = { ...p[i], x: 0.2 + i * 0.0005, y: -0.08 + i * 0.0002, visibility: 0.95 };
+    return p;
+  };
+  it("documents the raw behaviour: with the bystander first the hint and the pause are judged on the wrong person", () => {
+    const wrong = input({ poses: [bystander(), plank()] });
+    expect(placementHint(wrong)).toBe(HINTS.head);
+    expect(pausesCounting(wrong)).toBe(true);
+  });
+  it("puts the picked pose first and leaves the rest in order, so the visitor's clean plank gets no hint and no pause", () => {
+    const main = plank();
+    const other = bystander();
+    const ordered = mainFirst([other, main], main);
+    expect(ordered[0]).toBe(main);
+    expect(ordered).toHaveLength(2);
+    expect(ordered[1]).toBe(other);
+    const fixed = input({ poses: ordered });
+    expect(placementHint(fixed)).toBe(null);
+    expect(pausesCounting(fixed)).toBe(false);
+  });
+  it("is a no-op when the picked pose already leads, when there is no pose, or when the picked pose is not in the list", () => {
+    const main = plank();
+    const poses = [main, bystander()];
+    expect(mainFirst(poses, main)).toBe(poses);
+    expect(mainFirst([], null)).toEqual([]);
+    expect(mainFirst(poses, null)).toBe(poses);
+    expect(mainFirst(poses, plank())).toHaveLength(3);
   });
 });

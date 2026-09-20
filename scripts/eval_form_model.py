@@ -1,4 +1,4 @@
-"""Score a form classifier (Keras .h5 + the StandardScaler baked into src/scaler.ts, or another scaler json)
+"""Score a form classifier experiment (Keras .h5 + its scaler json, both written by train_form_model.py under OUT=)
 against the hand-labelled bottoms of the ground-truth corpus on all THREE landmark trace sets (Python legacy
 landmarks in tests/fixtures/traces, the site's own browser landmarks in tests/fixtures/traces-browser, and the
 browser landmarks of the horizontally flipped clips in tests/fixtures/traces-browser-mirrored).
@@ -7,7 +7,7 @@ compared with the label; high-confidence reps are counted, misses are listed. Th
 tests/corpus.test.ts measures through the real counter, minus the counter; use it to iterate on
 scripts/train_form_model.py quickly (seconds per run).
 
-usage: .venv/bin/python scripts/eval_form_model.py [model.h5] [scaler.json]
+usage: .venv/bin/python scripts/eval_form_model.py [model.h5] [scaler.json]   (defaults: scripts/form_v4.h5 and <model>_scaler.json)
 """
 import json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(os.path.join(HERE, "..")); sys.path.insert(0, HERE)
@@ -15,13 +15,10 @@ import numpy as np
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 import tensorflow as tf
 
-model_path = sys.argv[1] if len(sys.argv) > 1 else "scripts/form_v2.h5"
-if len(sys.argv) > 2:
-    sc = json.load(open(sys.argv[2])); MEAN, SCALE = np.array(sc["mean"]), np.array(sc["scale"])
-else:
-    ts = open("src/scaler.ts").read()
-    MEAN = np.array(json.loads(re.search(r"MEAN: readonly number\[\] = (\[.*?\]);", ts).group(1)))
-    SCALE = np.array(json.loads(re.search(r"SCALE: readonly number\[\] = (\[.*?\]);", ts).group(1)))
+model_path = sys.argv[1] if len(sys.argv) > 1 else "scripts/form_v4.h5"
+# The scaler lives next to the model as <OUT>_scaler.json (the site no longer has a src/scaler.ts to fall back on).
+scaler_path = sys.argv[2] if len(sys.argv) > 2 else re.sub(r"\.h5$", "", model_path) + "_scaler.json"
+sc = json.load(open(scaler_path)); MEAN, SCALE = np.array(sc["mean"]), np.array(sc["scale"])
 model = tf.keras.models.load_model(model_path)
 ASPECT = 16 / 9
 

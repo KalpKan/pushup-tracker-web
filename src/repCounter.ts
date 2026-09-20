@@ -63,6 +63,11 @@ export interface PartialEvent {
 
 export type CounterEvent = RepEvent | PartialEvent;
 
+/**
+ * "waiting": no plank seen yet; "top": at or following the top reference; "descending": the shoulders are
+ * still going deeper; "bottom": at the deepest point or rising short of RETURN_FRACTION (the whole way up,
+ * until the rep counts); "ascending": only on the sample that counted the rep, the next one is a "top".
+ */
 export type Phase = "waiting" | "top" | "descending" | "bottom" | "ascending";
 
 export interface RepState {
@@ -265,10 +270,10 @@ export function createRepCounter(options: RepCounterOptions = {}) {
       partialSent = false;
       return { kind: "rep", t: sample.t, good, reason, goodReps, totalReps, depth: depth / sample.scale };
     }
-    phase = rise > 0.1 * depth ? "ascending" : "bottom";
-    // Back near the top while ascending is handled above; a rise that never reaches RETURN_FRACTION but
-    // then goes deeper simply extends the same rep.
-    if (phase === "ascending") phase = "bottom";
+    // Still inside the rep: the phase stays "bottom" all the way up until RETURN_FRACTION is reached
+    // (counted above), because a rise that never gets there and then goes deeper simply extends the same
+    // rep; "ascending" here would hand the next sample to the top branch and end the rep early.
+    phase = "bottom";
     return null;
   }
 

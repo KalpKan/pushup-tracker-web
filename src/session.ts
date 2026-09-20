@@ -7,7 +7,7 @@ import { loadPoseLandmarker } from "./pose";
 import { features, type Point3 } from "./features";
 import { createTracker, type FrameVerdict } from "./tracker";
 import type { RepEvent, RepState } from "./repCounter";
-import { placementHint, pausesCounting, createHintDebouncer, HINTS } from "./hints";
+import { placementHint, pausesCounting, createHintDebouncer, mainFirst, HINTS } from "./hints";
 import { draw } from "./draw";
 
 export type Mode = "camera" | "demo";
@@ -148,12 +148,15 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
     // the problem is one that makes a count meaningless (no body, two bodies, frontal, head or feet gone)
     // nothing is counted or graded, so a cropped or crowded frame cannot produce a silent wrong count
     // (TEST r2 D4/D5). A head merely touching the edge shows the hint and keeps counting.
-    const hintInput = { poses, luminance: poses.length ? null : measureLuminance(now) };
+    // The hint and the pause are judged on the body the counter tracks (mainFirst), not on whichever body
+    // MediaPipe happened to list first.
+    const hintInput = { poses: mainFirst(poses, landmarks), luminance: poses.length ? null : measureLuminance(now) };
     const rawHint = placementHint(hintInput);
     const hint = hints.next(rawHint, now);
     const paused = pauseGate.next(rawHint != null && pausesCounting(hintInput) ? "pause" : null, now) != null;
     let verdict: FrameVerdict | null = null;
-    if (landmarks && visible(landmarks) && !paused) {
+    const seen = landmarks != null && visible(landmarks);
+    if (landmarks && seen && !paused) {
       const f = features(landmarks);
       const input = { t: stamp / 1000, vector: f.vector, aspect };
       verdict = tracker.liveVerdict(input);
@@ -166,7 +169,9 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
         flash = { text: "Go lower: that dip was too shallow to count", good: false, until: now + REP_FLASH_MS };
       }
     }
-    if (trace && (!landmarks || paused)) trace.push({ t: stamp / 1000, mediaTime: video.currentTime, shoulderY: null, features: null, faults: null, plank: false, event: null, poses: poses.length });
+    // Every analysed frame leaves a trace row, including a found-but-invisible body (round-4 critique: those
+    // frames were missing from ?trace, so a replay had fewer frames than the page analysed).
+    if (trace && (!seen || paused)) trace.push({ t: stamp / 1000, mediaTime: video.currentTime, shoulderY: null, features: null, faults: null, plank: false, event: null, poses: poses.length });
     if (trace && fullTrace) {
       const last = trace[trace.length - 1];
       if (last && last.t === stamp / 1000) {

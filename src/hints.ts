@@ -78,6 +78,16 @@ export function isSecondPerson(main: readonly HintLandmark[], other: readonly Hi
   return ratio >= SECOND_PERSON_MIN_TORSO && overlap(main, other) < SECOND_PERSON_MAX_OVERLAP;
 }
 
+/**
+ * The pose list with the tracked body first. placementHint and pausesCounting judge poses[0]; session.ts
+ * tracks the biggest body, which MediaPipe may list second, so without this a bystander's cut-off head
+ * paused the visitor's count (round-4 critique). Returns the same array when nothing needs moving.
+ */
+export function mainFirst<T>(poses: readonly T[], main: T | null): readonly T[] {
+  if (!main || !poses.length || poses[0] === main) return poses;
+  return [main, ...poses.filter((p) => p !== main)];
+}
+
 export function placementHint(input: HintInput): string | null {
   if (!input.poses.length) return input.luminance != null && input.luminance < DARK_LUMINANCE ? HINTS.dark : HINTS.noPose;
   const [p, ...rest] = input.poses;
