@@ -1,6 +1,7 @@
 """Score a form classifier (Keras .h5 + the StandardScaler baked into src/scaler.ts, or another scaler json)
-against the hand-labelled bottoms of the ground-truth corpus on BOTH landmark trace sets (Python legacy
-landmarks in tests/fixtures/traces, the site's own browser landmarks in tests/fixtures/traces-browser).
+against the hand-labelled bottoms of the ground-truth corpus on all THREE landmark trace sets (Python legacy
+landmarks in tests/fixtures/traces, the site's own browser landmarks in tests/fixtures/traces-browser, and the
+browser landmarks of the horizontally flipped clips in tests/fixtures/traces-browser-mirrored).
 For every labelled rep the mean P(good) over +-0.25 s of the labelled bottom is thresholded at 0.5 and
 compared with the label; high-confidence reps are counted, misses are listed. This is what
 tests/corpus.test.ts measures through the real counter, minus the counter; use it to iterate on
@@ -9,7 +10,7 @@ scripts/train_form_model.py quickly (seconds per run).
 usage: .venv/bin/python scripts/eval_form_model.py [model.h5] [scaler.json]
 """
 import json, os, re, sys
-HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(os.path.join(HERE, ".."))
+HERE = os.path.dirname(os.path.abspath(__file__)); os.chdir(os.path.join(HERE, "..")); sys.path.insert(0, HERE)
 import numpy as np
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 import tensorflow as tf
@@ -24,20 +25,14 @@ else:
 model = tf.keras.models.load_model(model_path)
 ASPECT = 16 / 9
 
+from form_features import form_features as _ff
 def form_features(v, aspect):
-    """Same maths as src/formFeatures.ts on the 36-float feature vector (x, y, z per landmark)."""
-    pts = np.array([[v[i * 3] * aspect, v[i * 3 + 1]] for i in range(12)])
-    shoulder = (pts[4] + pts[5]) / 2; hip = (pts[6] + pts[7]) / 2; ankle = (pts[10] + pts[11]) / 2
-    torso = np.linalg.norm(shoulder - hip) or 1e-6
-    rel = (pts - hip) / torso
-    if ankle[0] > shoulder[0]:
-        rel[:, 0] *= -1
-        rel = rel.reshape(6, 2, 2)[:, ::-1, :].reshape(12, 2)
-    return rel.reshape(-1)
+    """The 36-float trace vector (x, y, z per landmark) -> the classifier's inputs."""
+    return _ff([[v[i * 3], v[i * 3 + 1]] for i in range(12)], aspect)
 
 gt = json.load(open("tests/fixtures/clips/ground_truth.json"))
 summary = {}
-for name, d in (("python", "traces"), ("browser", "traces-browser")):
+for name, d in (("python", "traces"), ("browser", "traces-browser"), ("mirrored", "traces-browser-mirrored")):
     n = ok = 0; misses = []; rows = []
     for clip in gt["clips"]:
         path = f"tests/fixtures/{d}/{clip['id']}.json"

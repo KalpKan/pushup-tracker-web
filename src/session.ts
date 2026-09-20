@@ -1,13 +1,10 @@
 /**
  * One tracking session: a video source (webcam or the bundled demo clip) -> PoseLandmarker ->
- * 12-landmark features -> scaler -> TF.js classifier -> tracker (geometry rules + rep counter) -> canvas
- * overlay. Loaded lazily (dynamic import) so the ~20 MB of WASM + models only download on the first click.
+ * 12-landmark features -> tracker (geometry rules + rep counter) -> canvas overlay. Loaded lazily (dynamic
+ * import) so the ~20 MB of WASM + pose model only download on the first click.
  */
 import { loadPoseLandmarker } from "./pose";
-import { loadClassifier } from "./classifier";
 import { features, type Point3 } from "./features";
-import { scale } from "./scaler";
-import { formFeatures } from "./formFeatures";
 import { createTracker, type FrameVerdict } from "./tracker";
 import type { RepEvent, RepState } from "./repCounter";
 import { placementHint, pausesCounting, createHintDebouncer, HINTS } from "./hints";
@@ -45,7 +42,7 @@ type Landmark = Point3 & { visibility?: number };
 export async function startSession(opts: SessionOptions): Promise<Session> {
   const { mode, video, canvas } = opts;
   opts.onStatus("Loading the pose model (about 20 MB the first time, then cached)…");
-  const [pose, classifier] = await Promise.all([loadPoseLandmarker(), loadClassifier()]);
+  const pose = await loadPoseLandmarker();
 
   // Compile the GPU shaders on a blank frame now, not on the visitor's first rep (the first
   // detectForVideo used to take ~1 s, during which the demo clip's first rep went by unseen).
@@ -104,7 +101,7 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
   }
 
   const tracker = createTracker();
-  // ?trace in the URL records every analysed frame (time, shoulder height, probability, faults) into
+  // ?trace in the URL records every analysed frame (time, shoulder height, landmarks, faults) into
   // window.__pushupsTrace so scripts/e2e-corpus.mjs can save it next to the Python traces. Nothing leaves the page.
   const traceMode = new URLSearchParams(location.search).get("trace");
   const trace: TraceFrame[] | null = traceMode != null ? [] : null;
@@ -158,11 +155,10 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
     let verdict: FrameVerdict | null = null;
     if (landmarks && visible(landmarks) && !paused) {
       const f = features(landmarks);
-      const prob = classifier.predict(scale(formFeatures(f.vector, aspect)));
-      const input = { t: stamp / 1000, vector: f.vector, prob, aspect };
+      const input = { t: stamp / 1000, vector: f.vector, aspect };
       verdict = tracker.liveVerdict(input);
       const ev = tracker.push(input);
-      if (trace) trace.push({ t: input.t, mediaTime: video.currentTime, shoulderY: f.shoulderY, prob, features: f.vector.map((x) => Math.round(x * 1e4) / 1e4), faults: verdict.reason, plank: verdict.plank, event: ev ? (ev.kind === "rep" ? (ev.good ? "good" : `bad:${ev.reason}`) : "partial") : null, poses: poses.length });
+      if (trace) trace.push({ t: input.t, mediaTime: video.currentTime, shoulderY: f.shoulderY, features: f.vector.map((x) => Math.round(x * 1e4) / 1e4), faults: verdict.reason, plank: verdict.plank, event: ev ? (ev.kind === "rep" ? (ev.good ? "good" : `bad:${ev.reason}`) : "partial") : null, poses: poses.length });
       if (ev?.kind === "rep") {
         flash = { text: ev.good ? `Rep ${ev.totalReps}: good` : `Rep ${ev.totalReps}: ${ev.reason}`, good: ev.good, until: now + REP_FLASH_MS };
         opts.onRep(ev);
@@ -170,7 +166,7 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
         flash = { text: "Go lower: that dip was too shallow to count", good: false, until: now + REP_FLASH_MS };
       }
     }
-    if (trace && (!landmarks || paused)) trace.push({ t: stamp / 1000, mediaTime: video.currentTime, shoulderY: null, prob: null, features: null, faults: null, plank: false, event: null, poses: poses.length });
+    if (trace && (!landmarks || paused)) trace.push({ t: stamp / 1000, mediaTime: video.currentTime, shoulderY: null, features: null, faults: null, plank: false, event: null, poses: poses.length });
     if (trace && fullTrace) {
       const last = trace[trace.length - 1];
       if (last && last.t === stamp / 1000) {
@@ -242,7 +238,6 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
     video.srcObject = null;
     video.removeAttribute("src");
     pose.close();
-    classifier.dispose();
   }
 
   schedule();
@@ -259,7 +254,6 @@ export interface TraceFrame {
   allPoses?: number[][][];
   mediaTime: number;
   shoulderY: number | null;
-  prob: number | null;
   features: number[] | null;
   faults: string | null;
   plank: boolean;
@@ -270,8 +264,8 @@ export interface TraceFrame {
 // Exposed for manual diagnosis from the browser console (no effect on the app).
 declare global {
   interface Window {
-    __pushups?: { loadPoseLandmarker: typeof loadPoseLandmarker; loadClassifier: typeof loadClassifier };
+    __pushups?: { loadPoseLandmarker: typeof loadPoseLandmarker };
     __pushupsTrace?: TraceFrame[];
   }
 }
-window.__pushups = { loadPoseLandmarker, loadClassifier };
+window.__pushups = { loadPoseLandmarker };

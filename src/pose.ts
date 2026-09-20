@@ -3,12 +3,11 @@
  * node_modules at build time) and the model (/models/pose_landmarker_full.task) are served by the
  * site itself, so nothing is fetched from a CDN. GPU delegate first, CPU if the GPU one fails.
  *
- * Why "full" (9.4 MB) and not "lite" (5.5 MB): the form classifier was trained on landmarks from the
- * legacy Python solution at model_complexity=1, which is the "full" network. The lite network puts
- * the z coordinates 0.05-0.1 off (1-2 scaler standard deviations), and on the demo clip the
- * classifier then called every good frame "bad" (p 0.03-0.4 where Python said 0.85-0.98). With the
- * full model the per-frame probabilities agree with Python on 19 of 21 sampled frames
- * (measured 2026-09-18, incident in the portfolio repo's skills/portfolio-ops/incidents.md).
+ * Why "full" (9.4 MB) and not "lite" (5.5 MB): the geometry thresholds (form.ts) and the ground-truth
+ * traces (tests/fixtures/traces-browser*) were measured with the full network, the same one the Python
+ * original's model_complexity=1 used; the lite network placed landmarks 0.05-0.1 off it on the same
+ * frames (measured 2026-09-18 when it made the then classifier call every good frame "bad"; incident
+ * in the portfolio repo's skills/portfolio-ops/incidents.md).
  */
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
 

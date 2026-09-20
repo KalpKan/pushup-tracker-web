@@ -17,6 +17,11 @@ const stage = $<HTMLElement>("stage");
 
 let session: Session | null = null;
 let starting = false;
+/** A measured rate under SLOW_FPS for SLOW_MS shows a one-line warning under the count (TEST r3 D6: an 8 fps device silently lost a fast rep). */
+const SLOW_FPS = 8;
+const SLOW_MS = 2000;
+let slowSince: number | null = null;
+let slowWarned = false;
 
 function setStatus(text: string) {
   status.textContent = text;
@@ -36,6 +41,8 @@ async function start(mode: Mode) {
   totalEl.textContent = "0";
   formEl.textContent = "–";
   fpsEl.textContent = "–";
+  slowSince = null;
+  slowWarned = false;
   stage.classList.add("live");
   // On a phone the header and buttons push the stage below the fold; bring the video and the tiles into view.
   if (window.innerWidth <= 480) stage.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -56,11 +63,20 @@ async function start(mode: Mode) {
         totalEl.textContent = String(st.totalReps);
         formEl.textContent = paused ? "paused" : verdict == null ? "no pose" : verdict.good ? "good" : `bad: ${verdict.reason ?? "unsure"}`;
         fpsEl.textContent = fps ? `${fps} fps` : "–";
+        if (fps && fps < SLOW_FPS) {
+          slowSince ??= performance.now();
+          if (!slowWarned && performance.now() - slowSince >= SLOW_MS) {
+            slowWarned = true;
+            setStatus(`Slow device (${fps} fps): fast reps may be missed. Close other tabs or use a laptop.`);
+          }
+        } else slowSince = null;
       },
       onEnd: () => {
         const result = `${goodEl.textContent} good of ${totalEl.textContent}`;
         session = null;
         setButtons(false);
+        formEl.textContent = "–";
+        fpsEl.textContent = "–";
         setStatus(`Clip finished: ${result}. Play it again or start your camera.`);
       },
       onError: (err) => {

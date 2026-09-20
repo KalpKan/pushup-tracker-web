@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createRepCounter, type RepSample } from "../src/repCounter";
 
 /** Synthetic shoulder-height wave: top at 0.3, bottom at 0.3 + amp; torso 0.28; plank-like unless said otherwise. */
-function wave(opts: { reps: number; period: number; fps: number; amp?: number; faults?: (t: number) => string[]; bottomFaults?: (t: number) => string[]; hold?: number }) {
+function wave(opts: { reps: number; period: number; fps: number; amp?: number; faults?: (t: number) => string[]; bottomFaults?: (t: number) => string[]; bottomMetrics?: (t: number) => Record<string, number>; hold?: number }) {
   const { reps, period, fps, amp = 0.3, hold = 0.5 } = opts;
   const samples: RepSample[] = [];
   const n = Math.round((hold + reps * period + hold) * fps);
@@ -10,13 +10,13 @@ function wave(opts: { reps: number; period: number; fps: number; amp?: number; f
     const t = i / fps;
     const phase = t < hold ? 0 : t > hold + reps * period ? 0 : (t - hold) % period;
     const y = 0.3 + amp * (1 - Math.cos((2 * Math.PI * phase) / period)) / 2;
-    samples.push({ t, shoulderY: y, scale: 0.28, plank: true, faults: opts.faults?.(t) ?? [], bottomFaults: opts.bottomFaults?.(t) ?? [] });
+    samples.push({ t, shoulderY: y, scale: 0.28, plank: true, faults: opts.faults?.(t) ?? [], bottomFaults: opts.bottomFaults?.(t) ?? [], bottomMetrics: opts.bottomMetrics?.(t) });
   }
   return samples;
 }
 
-function run(samples: RepSample[]) {
-  const c = createRepCounter();
+function run(samples: RepSample[], judgeBottom?: (means: Record<string, number>) => string[]) {
+  const c = createRepCounter({ judgeBottom });
   const events = [];
   for (const s of samples) {
     const ev = c.push(s);
@@ -99,7 +99,7 @@ describe("createRepCounter (time-based, body-scaled)", () => {
 
   it("judges each end on the majority of its frames, not a single one", () => {
     // One noisy 'bad' frame at the very bottom of every rep must not flip the verdict.
-    const r = run(wave({ reps: 3, period: 1.2, fps: 30, bottomFaults: (t) => (Math.abs(((t - 0.5) % 1.2) - 0.6) < 0.02 ? ["keep your body straight"] : []) }));
+    const r = run(wave({ reps: 3, period: 1.2, fps: 30, bottomFaults: (t) => (Math.abs(((t - 0.5) % 1.2) - 0.6) < 0.02 ? ["dropped to the floor"] : []) }));
     expect(r.goodReps).toBe(3);
   });
 
@@ -119,6 +119,19 @@ describe("createRepCounter (time-based, body-scaled)", () => {
     expect(r.totalReps).toBe(2);
     expect(r.goodReps).toBe(1);
     expect(r.events[1].reason).toBe("hips sagging");
+  });
+
+  // FIX r3 (2026-09-19): bottom-only rules run on the MEAN of the bottom window's metrics, so one noisy frame cannot decide them.
+  it("judges the bottom-only rules on the mean of the bottom window's metrics, not on single frames", () => {
+    // Elbow metric: -0.3 (fine) on every frame except a spike to +0.5 on the deepest frame of each rep -> the mean stays fine.
+    const spiky = wave({ reps: 3, period: 1.2, fps: 30, bottomMetrics: (t) => ({ elbowAhead: Math.abs(((t - 0.5) % 1.2) - 0.6) < 0.02 ? 0.5 : -0.3 }) });
+    const judge = (m: Record<string, number>) => (m.elbowAhead > -0.09 ? ["dropped to the floor"] : []);
+    expect(run(spiky, judge).goodReps).toBe(3);
+    // The same metric at 0.0 throughout the second rep's bottom -> that rep is bad with the rule's reason.
+    const dropped = wave({ reps: 3, period: 1.2, fps: 30, bottomMetrics: (t) => ({ elbowAhead: t > 0.5 + 1.2 && t < 0.5 + 2.4 ? 0 : -0.3 }) });
+    const r = run(dropped, judge);
+    expect(r.goodReps).toBe(2);
+    expect(r.events.map((e) => e.reason)).toEqual([null, "dropped to the floor", null]);
   });
 
   it("scales the minimum depth with the body: a rep of 0.35 torso counts, 0.15 torso does not", () => {

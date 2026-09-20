@@ -12,4 +12,8 @@ scripts/pushup_form_keras2.h5
 tests/fixtures/clips/.mjpeg/
 tests/fixtures/results/
 tests/fixtures/training/
-scripts/form_v3.h5
+scripts/form_v*.h5
+scripts/form_v*_scaler.json
+scripts/form_v*_report.json
+tests/fixtures/training-browser/
+scripts/__pycache__/

@@ -12,6 +12,8 @@
 // tests/fixtures/results/<timestamp>.json (git-ignored) so a fixer can diff rounds. TRACE_DIR=<dir> also
 // saves the page's own per-frame trace (?trace, see session.ts) as <dir>/<id>.json, the browser-side
 // counterpart of tests/fixtures/traces/<id>.json, for comparing MediaPipe-in-Chrome with the Python landmarks.
+// MIRROR=1 plays the horizontally flipped clips (flip-<id>.mjpeg from `MIRROR=1 node scripts/make-mjpeg.mjs`):
+// the visitor facing the other way, which TEST r3 (D1) found graded every bad rep good.
 import puppeteer from "puppeteer-core";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -25,9 +27,11 @@ const wanted = new Set(args.filter((a) => !a.startsWith("http")));
 const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const gl = process.env.GPU ? ["--use-gl=angle", "--use-angle=metal"] : ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 const tol = gt.total_tolerance ?? 1;
+const mirror = Boolean(process.env.MIRROR);
+const fileId = (id) => `${mirror ? "flip-" : ""}${id}`;
 
 async function runClip(clip) {
-  const mjpeg = join(root, "tests/fixtures/clips/.mjpeg", `${clip.id}.mjpeg`);
+  const mjpeg = join(root, "tests/fixtures/clips/.mjpeg", `${fileId(clip.id)}.mjpeg`);
   if (!existsSync(mjpeg)) return { id: clip.id, skipped: `${mjpeg} missing (run scripts/make-mjpeg.mjs)` };
   const browser = await puppeteer.launch({
     executablePath: chrome,
@@ -68,7 +72,7 @@ async function runClip(clip) {
     if (process.env.TRACE_DIR) {
       mkdirSync(process.env.TRACE_DIR, { recursive: true });
       const trace = await page.evaluate(() => window.__pushupsTrace ?? []);
-      writeFileSync(join(process.env.TRACE_DIR, `${clip.id}.json`), JSON.stringify({ id: clip.id, source: "browser", frames: trace }));
+      writeFileSync(join(process.env.TRACE_DIR, `${clip.id}.json`), JSON.stringify({ id: clip.id, source: mirror ? "browser-mirrored" : "browser", frames: trace }));
     }
     const fpsAvg = fpsSamples.length ? Math.round(fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length) : null;
     const goodOk = stats.good >= clip.good_min - tol && stats.good <= clip.good_max + tol;
@@ -86,14 +90,14 @@ for (const clip of gt.clips) {
   const r = await runClip(clip);
   results.push(r);
   if (r.skipped) console.log(`${clip.id.padEnd(16)} SKIP ${r.skipped}`);
-  else console.log(`${clip.id.padEnd(16)} ${r.pass ? "PASS" : "FAIL"}  total ${r.got.total} (want ${r.expected.total}±${tol})  good ${r.got.good} (want ${r.expected.good[0]}-${r.expected.good[1]}±${tol})  fps avg ${r.fpsAvg} min ${r.fpsMin}${r.errors.length ? `  errors: ${r.errors.length}` : ""}`);
+  else console.log(`${fileId(clip.id).padEnd(16)} ${r.pass ? "PASS" : "FAIL"}  total ${r.got.total} (want ${r.expected.total}±${tol})  good ${r.got.good} (want ${r.expected.good[0]}-${r.expected.good[1]}±${tol})  fps avg ${r.fpsAvg} min ${r.fpsMin}${r.errors.length ? `  errors: ${r.errors.length}` : ""}`);
 }
 const ran = results.filter((r) => !r.skipped);
 const passed = ran.filter((r) => r.pass).length;
-console.log(`\n${passed}/${ran.length} clips within tolerance (${url}, ${process.env.GPU ? "GPU" : "SwiftShader"})`);
+console.log(`\n${passed}/${ran.length} clips within tolerance (${url}, ${process.env.GPU ? "GPU" : "SwiftShader"}${mirror ? ", mirrored" : ""})`);
 const outDir = join(root, "tests/fixtures/results");
 mkdirSync(outDir, { recursive: true });
 const outFile = join(outDir, `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-writeFileSync(outFile, JSON.stringify({ url, gpu: Boolean(process.env.GPU), date: new Date().toISOString(), passed, ran: ran.length, results }, null, 2));
+writeFileSync(outFile, JSON.stringify({ url, gpu: Boolean(process.env.GPU), mirror, date: new Date().toISOString(), passed, ran: ran.length, results }, null, 2));
 console.log(`written ${outFile}`);
 if (!process.env.REPORT_ONLY && passed !== ran.length) process.exit(1);

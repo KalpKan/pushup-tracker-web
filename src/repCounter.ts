@@ -13,8 +13,11 @@
  *   - only lets plank-like samples move the top reference or open a descent, so standing up, kneeling
  *     to rest, sitting back or walking into the frame never look like a rep;
  *   - judges the form at each end on the majority of the frames spent there (the top: the 0.4 s before the
- *     descent; the bottom: the frames within 20 % of the depth), and asks the classifier about the bottom
- *     plus the ascent, not one frame;
+ *     descent; the bottom: the frames within 20 % of the depth) and the bottom-only rules on the MEAN
+ *     geometry of that window, never on one frame and never on a per-frame neural probability (FIX r3,
+ *     2026-09-19: see form.ts for why the classifier was retired; an ascent rule on the hips lagging behind
+ *     the shoulders was tried there too and dropped: the "worm" of the demo clip reads 0.50-0.61 against
+ *     clean reps from 0.61, and the ratio moved by up to 0.6 between 30 and 10 fps on holds);
  *   - holds back a sample that jumps by more than a rep's minimum depth until the next one agrees, so a
  *     single glitched landmark frame is neither a rep nor a new top.
  * All decisions are on time (seconds) and body-scaled distances, never on frame counts.
@@ -30,10 +33,15 @@ export interface RepSample {
   plank: boolean;
   /** Faults that apply at the top and the bottom. */
   faults: readonly string[];
-  /** Faults that apply only at the bottom (the classifier's verdict). */
+  /** Faults that apply only at the bottom, per frame (majority over the bottom window). */
   bottomFaults: readonly string[];
-  /** Classifier P(good) for this frame, averaged over the bottom window (null = not consulted). */
-  bottomProb?: number | null;
+  /** Numbers averaged over the bottom window and handed to `judgeBottom` (see createRepCounter). */
+  bottomMetrics?: Readonly<Record<string, number>>;
+}
+
+export interface RepCounterOptions {
+  /** Bottom-only rules on the MEAN of the bottom window's `bottomMetrics`: returns the faults found (form.ts bottomFaults). */
+  judgeBottom?: (means: Record<string, number>) => readonly string[];
 }
 
 export interface RepEvent {
@@ -46,8 +54,6 @@ export interface RepEvent {
   totalReps: number;
   /** Depth of this rep in torso lengths (diagnostics). */
   depth: number;
-  /** Mean classifier P(good) over the frames it was asked about, or null (diagnostics). */
-  clfMean: number | null;
 }
 
 export interface PartialEvent {
@@ -82,14 +88,12 @@ const TOP_WINDOW_S = 0.4;
 /** A dip of at least this fraction of the minimum depth that turns back up is reported as a partial. */
 const PARTIAL_FRACTION = 0.5;
 const MAX_WINDOW = 400;
-/** Fault name for a classifier "bad" at the bottom (shared with tracker.ts). */
-export const CLASSIFIER_FAULT = "keep your body straight";
 /** Fault name of the knees-on-the-floor rule (form.ts): a rep that starts in a plank and ends on the knees is a rest, not an attempt. */
 export const KNEES_FAULT = "knees down";
 
-interface Frame { t: number; y: number; faults: readonly string[]; bottomFaults: readonly string[]; prob: number | null }
+interface Frame { t: number; y: number; faults: readonly string[]; bottomFaults: readonly string[]; metrics: Readonly<Record<string, number>> | null }
 
-export function createRepCounter() {
+export function createRepCounter(options: RepCounterOptions = {}) {
   let goodReps = 0;
   let totalReps = 0;
   let phase: Phase = "waiting";
@@ -140,8 +144,7 @@ export function createRepCounter() {
 
   /**
    * Majority verdict over a window of frames: the most frequent fault when more than half the frames
-   * carry one, else null. At the bottom the classifier's probability is averaged over the window (a mean
-   * is steadier than a per-frame vote near 0.5) and counts as CLASSIFIER_FAULT when <= 0.5.
+   * carry one, else null. At the bottom the per-frame bottom faults count too.
    */
   function verdict(frames: Frame[], bottom: boolean): string | null {
     if (!frames.length) return null;
@@ -161,11 +164,14 @@ export function createRepCounter() {
     return frames.length ? frames.filter((f) => f.faults.includes(fault)).length / frames.length : 0;
   }
 
-  /** The classifier's verdict: mean P(good) over the frames that carry one, when at least half of them do. */
-  function classifierMean(frames: Frame[]): number | null {
-    const probs = frames.map((f) => f.prob).filter((p): p is number => p != null);
-    if (!probs.length || probs.length * 2 < frames.length) return null;
-    return probs.reduce((a, b) => a + b, 0) / probs.length;
+  /** The bottom-only rules on the mean of the window's metrics (null when nothing to judge). */
+  function bottomJudgement(frames: Frame[]): string | null {
+    if (!options.judgeBottom) return null;
+    const rows = frames.map((f) => f.metrics).filter((m): m is Readonly<Record<string, number>> => m != null);
+    if (!rows.length) return null;
+    const means: Record<string, number> = {};
+    for (const row of rows) for (const [k, v] of Object.entries(row)) means[k] = (means[k] ?? 0) + v / rows.length;
+    return options.judgeBottom(means)[0] ?? null;
   }
 
   function keep(list: Frame[], f: Frame): void {
@@ -177,7 +183,7 @@ export function createRepCounter() {
     const y = sample.shoulderY;
     const need = minDepth(sample.scale);
     lastY = y;
-    const frame: Frame = { t: sample.t, y, faults: sample.faults, bottomFaults: sample.bottomFaults, prob: sample.bottomProb ?? null };
+    const frame: Frame = { t: sample.t, y, faults: sample.faults, bottomFaults: sample.bottomFaults, metrics: sample.bottomMetrics ?? null };
 
     if (phase === "waiting") {
       if (!sample.plank) return null;
@@ -244,14 +250,7 @@ export function createRepCounter() {
         partialSent = false;
         return null;
       }
-      // The classifier is averaged over the bottom window AND the whole ascent up to here (RETURN_FRACTION
-      // of the depth): the faults it was trained on (a collapse on the floor, the chest rising before the
-      // hips) show on the way up, while at the very bottom a body lying on the floor looks straight and a
-      // clean chest-to-floor rep looks like a sag; judged on the bottom alone it flipped 5 of 69 labelled
-      // reps on the site's own landmarks (TEST r2 D2, 2026-09-19).
-      const classifierFrames = downFrames.filter((f) => f.t >= bottomT || f.y >= bottomY - END_WINDOW * depth);
-      const clfMean = classifierMean(classifierFrames);
-      const reason = verdict(topFrames, false) ?? verdict(bottomWindow, true) ?? (clfMean != null && clfMean <= 0.5 ? CLASSIFIER_FAULT : null);
+      const reason = verdict(topFrames, false) ?? verdict(bottomWindow, true) ?? bottomJudgement(bottomWindow);
       const good = reason == null;
       totalReps++;
       if (good) goodReps++;
@@ -264,7 +263,7 @@ export function createRepCounter() {
       downFrames = [];
       maxDip = 0;
       partialSent = false;
-      return { kind: "rep", t: sample.t, good, reason, goodReps, totalReps, depth: depth / sample.scale, clfMean };
+      return { kind: "rep", t: sample.t, good, reason, goodReps, totalReps, depth: depth / sample.scale };
     }
     phase = rise > 0.1 * depth ? "ascending" : "bottom";
     // Back near the top while ascending is handled above; a rise that never reaches RETURN_FRACTION but

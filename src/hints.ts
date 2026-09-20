@@ -41,9 +41,26 @@ export const HINTS = {
  */
 const FAR = 0.06;
 const outside = (p: HintLandmark) => p.x < EDGE || p.x > 1 - EDGE || p.y < EDGE || p.y > 1 - EDGE || (p.visibility ?? 1) < MIN_VIS;
+const beyond = (p: HintLandmark) => p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1 || (p.visibility ?? 1) < MIN_VIS;
 const farOutside = (p: HintLandmark) => p.x < -FAR || p.x > 1 + FAR || p.y < -FAR || p.y > 1 + FAR || (p.visibility ?? 1) < MIN_VIS;
 const mid = (a: HintLandmark, b: HintLandmark) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const torsoLength = (p: readonly HintLandmark[]) => { const s = mid(p[L_SHOULDER], p[R_SHOULDER]), h = mid(p[L_HIP], p[R_HIP]); return Math.hypot(s.x - h.x, s.y - h.y); };
+/**
+ * A cut-off head cannot be told from a head touching the edge by coordinates alone: MediaPipe guesses the
+ * face just past the edge in both cases (IMG_1359 with the head really out of the frame puts the nose at
+ * y -0.01; Kalp's test_video with the face at the right edge and still visible puts it at x 1.03). What
+ * differs is the guessed head's SIZE: with the head really gone the 11 face landmarks collapse to a cluster
+ * 0.04-0.13 torso lengths across (ear midpoint to nose), against 0.15-0.35 for a visible head (measured on
+ * the ?trace=full dumps of test_video, test_video_2, good_IMG_4378 and IMG_1359, TEST r3 D3, 2026-09-19).
+ */
+export const HEAD_MIN_SIZE = 0.13;
+const HEAD_MIN_BEYOND = 6;
+export function headOut(p: readonly HintLandmark[]): boolean {
+  if (HEAD.filter((i) => p[i] && beyond(p[i])).length < HEAD_MIN_BEYOND) return false;
+  const nose = p[0], ear = mid(p[7], p[8]);
+  const size = Math.hypot(ear.x - nose.x, ear.y - nose.y) / (torsoLength(p) || 1e-6);
+  return size < HEAD_MIN_SIZE;
+}
 const box = (p: readonly HintLandmark[]) => ({ x0: Math.min(...p.map((l) => l.x)), y0: Math.min(...p.map((l) => l.y)), x1: Math.max(...p.map((l) => l.x)), y1: Math.max(...p.map((l) => l.y)) });
 /** Intersection area over the smaller box's area (0 = apart, 1 = one inside the other). */
 function overlap(a: readonly HintLandmark[], b: readonly HintLandmark[]): number {
@@ -66,9 +83,9 @@ export function placementHint(input: HintInput): string | null {
   const [p, ...rest] = input.poses;
   if (p.length < 29) return HINTS.noPose;
   if (rest.some((q) => isSecondPerson(p, q))) return HINTS.twoPeople;
-  // Any head landmark past the edge: with the head cut off MediaPipe guesses a nose just inside the frame
-  // while an ear lands outside (TEST r2 D4).
-  if (HEAD.some((i) => p[i] && outside(p[i]))) return HINTS.head;
+  // Most of the head past the edge AND collapsed to a fraction of its size (see headOut): a face merely
+  // touching the edge keeps its size and gets no hint (TEST r3 D3: a permanent false hint on test_video).
+  if (headOut(p)) return HINTS.head;
   if (outside(p[L_ANKLE]) && outside(p[R_ANKLE])) return HINTS.feet;
   // Frontal: the shoulders are wide apart compared with the shoulder-hip distance (side-on they overlap).
   const shoulderW = Math.hypot(p[L_SHOULDER].x - p[R_SHOULDER].x, p[L_SHOULDER].y - p[R_SHOULDER].y);
@@ -119,7 +136,7 @@ export function pausesCounting(input: HintInput): boolean {
   const [p, ...rest] = input.poses;
   if (p.length < 29) return true;
   if (rest.some((q) => isSecondPerson(p, q))) return true;
-  if (HEAD.some((i) => p[i] && farOutside(p[i]))) return true;
+  if (headOut(p) && HEAD.some((i) => p[i] && farOutside(p[i]))) return true;
   if (farOutside(p[L_ANKLE]) && farOutside(p[R_ANKLE])) return true;
   return placementHint({ poses: [p], luminance: input.luminance }) === HINTS.frontal;
 }

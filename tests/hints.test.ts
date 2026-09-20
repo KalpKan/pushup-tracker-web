@@ -1,12 +1,23 @@
 /** Placement hints from a pose result (pure function, no DOM). */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { createHintDebouncer, HINTS, pausesCounting, placementHint, type HintInput } from "../src/hints";
+
+/** Real MediaPipe poses (33 x [x, y, z, visibility]) recorded from the site with ?trace=full (TEST r3 D3, 2026-09-19). */
+const REAL = JSON.parse(readFileSync(new URL("./fixtures/head_edge_poses.json", import.meta.url), "utf8")) as Record<string, number[][]>;
+const real = (key: string) => REAL[key].map(([x, y, z, visibility]) => ({ x, y, z, visibility }));
 
 const lm = (over: Partial<Record<number, { x?: number; y?: number; visibility?: number }>> = {}) =>
   Array.from({ length: 33 }, (_, i) => ({ x: 0.5, y: 0.5, z: 0, visibility: 0.95, ...(over[i] ?? {}) }));
 // A side-on plank: head right, feet left, all inside the frame.
 const plank = () => lm({ 0: { x: 0.85, y: 0.45 }, 11: { x: 0.75, y: 0.5 }, 12: { x: 0.76, y: 0.52 }, 23: { x: 0.5, y: 0.55 }, 24: { x: 0.51, y: 0.56 }, 27: { x: 0.2, y: 0.7 }, 28: { x: 0.21, y: 0.71 } });
 const input = (over: Partial<HintInput>): HintInput => ({ poses: [plank()], luminance: 0.4, ...over });
+/** The plank with its head cut off: MediaPipe then guesses all 11 face landmarks as a tight cluster (a few hundredths of a torso across) at or past the edge. */
+const headGone = (at: { x?: number; y?: number; visibility?: number }) => {
+  const p = plank();
+  for (let i = 0; i <= 10; i++) p[i] = { ...p[i], x: (at.x ?? 0.85) + i * 0.001, y: (at.y ?? 0.45) + i * 0.0005, visibility: at.visibility ?? 0.95 };
+  return p;
+};
 
 describe("placementHint", () => {
   it("says nothing for a clean side-on plank", () => {
@@ -18,10 +29,17 @@ describe("placementHint", () => {
   it("asks to step back when there is no pose in a lit frame", () => {
     expect(placementHint(input({ poses: [] }))).toMatch(/whole body/i);
   });
-  it("says the head is out of frame", () => {
-    const p = plank();
-    p[0] = { ...p[0], y: -0.05, visibility: 0.2 };
-    expect(placementHint(input({ poses: [p] }))).toMatch(/head|move back/i);
+  it("says the head is out of frame (the 11 face landmarks guessed as a collapsed cluster beyond the top edge, as MediaPipe does for a cut-off head)", () => {
+    expect(placementHint(input({ poses: [headGone({ y: -0.03 })] }))).toMatch(/head|move back/i);
+    expect(placementHint(input({ poses: [headGone({ y: 0.4, visibility: 0.2 })] }))).toMatch(/head|move back/i);
+  });
+  it("D3: a head at the edge of the frame but still visible (Kalp's test_video: face landmarks at x 1.01-1.05, head size normal) is not out of frame", () => {
+    expect(placementHint(input({ poses: [real("test_video@3.2")] }))).toBeNull();
+    expect(placementHint(input({ poses: [real("test_video@2.2")] }))).toBeNull();
+  });
+  it("D3: a head really cut off at the top (IMG_1359: the guessed head collapses to a third of its size at y ~ 0) is out of frame", () => {
+    expect(placementHint(input({ poses: [real("IMG_1359@3.0")] }))).toBe(HINTS.head);
+    expect(placementHint(input({ poses: [real("IMG_1359@4.5")] }))).toBe(HINTS.head);
   });
   it("says the feet are out of frame", () => {
     const p = plank();
@@ -38,10 +56,9 @@ describe("placementHint", () => {
     const phantom = plank().map((l) => ({ ...l, x: 0.5 + (l.x - 0.5) * 0.25, y: 0.55 + (l.y - 0.55) * 0.25 }));
     expect(placementHint(input({ poses: [plank(), phantom] }))).toBe(null);
   });
-  it("says the head is out of frame when an ear is past the edge even though the nose was guessed inside (D4)", () => {
-    const p = plank();
-    p[0] = { ...p[0], x: 0.97 };
-    p[8] = { ...p[8], x: 1.02 };
+  it("says the head is out of frame when the nose was guessed just inside but the rest of the collapsed head is past the edge (r2 D4)", () => {
+    const p = headGone({ x: 1.01 });
+    p[0] = { ...p[0], x: 0.99 };
     expect(placementHint(input({ poses: [p] }))).toBe(HINTS.head);
   });
   it("asks to turn side-on for a frontal pose (shoulders wide apart, short body line)", () => {
@@ -92,17 +109,16 @@ describe("pausesCounting (D4/D5: which placement problems stop the counter)", ()
     const frontal = lm({ 0: { x: 0.5, y: 0.2 }, 11: { x: 0.35, y: 0.35 }, 12: { x: 0.65, y: 0.35 }, 23: { x: 0.4, y: 0.5 }, 24: { x: 0.6, y: 0.5 }, 27: { x: 0.42, y: 0.6 }, 28: { x: 0.58, y: 0.6 } });
     expect(pausesCounting(input({ poses: [frontal] }))).toBe(true);
   });
-  it("keeps counting when the head is only just past the edge (Kalp's clips dip the nose to x 1.03 at every bottom) but pauses when it is well outside or invisible", () => {
+  it("keeps counting (and shows no hint) when the head is only just past the edge with its size intact (Kalp's clips dip the nose to x 1.03 at every bottom), keeps counting under the hint when a cut-off head sits at the edge (IMG_1359 counts 9/9), and pauses when the head is well outside or invisible", () => {
     const edge = plank();
     edge[0] = { ...edge[0], x: 1.03 };
-    expect(placementHint(input({ poses: [edge] }))).toBe(HINTS.head);
+    expect(placementHint(input({ poses: [edge] }))).toBeNull();
     expect(pausesCounting(input({ poses: [edge] }))).toBe(false);
-    const gone = plank();
-    gone[0] = { ...gone[0], x: 1.1 };
-    expect(pausesCounting(input({ poses: [gone] }))).toBe(true);
-    const invisible = plank();
-    invisible[0] = { ...invisible[0], visibility: 0.2 };
-    expect(pausesCounting(input({ poses: [invisible] }))).toBe(true);
+    const cutOff = real("IMG_1359@3.0");
+    expect(placementHint(input({ poses: [cutOff] }))).toBe(HINTS.head);
+    expect(pausesCounting(input({ poses: [cutOff] }))).toBe(false);
+    expect(pausesCounting(input({ poses: [headGone({ x: 1.1 })] }))).toBe(true);
+    expect(pausesCounting(input({ poses: [headGone({ x: 0.9, visibility: 0.2 })] }))).toBe(true);
   });
   it("pauses when both feet are invisible (a frontal upper body) but not when they merely touch the edge", () => {
     const touch = plank();
