@@ -32,8 +32,9 @@ let starting = false;
 const SLOW_FPS = 8;
 const SLOW_MS = 2000;
 /** Matches --d-out in style.css. */
-/** Safety net: the 180 ms pulse attribute is normally removed by `animationend`. */
+/** Safety net: the 180 ms pulse attribute is normally removed by its own `animationend`. */
 const PULSE_FALLBACK_MS = 1200;
+/** Matches --d-out in style.css. */
 const HINT_OUT_MS = 400;
 const IDLE = "—";
 
@@ -77,8 +78,10 @@ function setVerdict(text: string, tone: Tone) {
  * finished wins for as long as session.ts holds it, so the plate and the skeleton always agree.
  */
 function verdictWords(paused: boolean, verdict: { good: boolean; reason: string | null } | null, result: RepResult | null): [string, Tone] {
-  if (result) return result.good ? ["clean", "good"] : [result.reason ?? "unsure", "bad"];
+  // Paused first: the skeleton is grey the moment counting stops, and a held "clean" over a grey body
+  // would tell the visitor nothing is wrong at the one moment something is (reviewer, 2026-09-21).
   if (paused) return ["paused", "paused"];
+  if (result) return result.good ? ["clean", "good"] : [result.reason ?? "unsure", "bad"];
   if (verdict == null) return ["no pose", "neutral"];
   return verdict.good ? ["clean", "good"] : [verdict.reason ?? "unsure", "bad"];
 }
@@ -112,18 +115,29 @@ function setHint(text: string | null) {
 
 let pulseTimer: number | undefined;
 
-function pulseRep() {
+function clearPulse() {
   window.clearTimeout(pulseTimer);
+  stage.removeEventListener("animationend", onPulseEnd);
   delete stage.dataset.rep;
+}
+
+function onPulseEnd(e: AnimationEvent) {
+  if (e.target === stage && e.animationName === "rep-pulse") clearPulse();
+}
+
+function pulseRep() {
+  clearPulse();
   void stage.offsetWidth; // a CSS animation only restarts once the attribute has actually been off
   stage.dataset.rep = "counted";
   if (reduceMotion.matches) {
     // No animation under reduced motion: a static accent frame, held for 600 ms, then simply gone.
-    pulseTimer = window.setTimeout(() => delete stage.dataset.rep, 600);
+    pulseTimer = window.setTimeout(clearPulse, 600);
     return;
   }
-  stage.addEventListener("animationend", () => delete stage.dataset.rep, { once: true });
-  pulseTimer = window.setTimeout(() => delete stage.dataset.rep, PULSE_FALLBACK_MS);
+  // AnimationEvent bubbles: the verdict word's 120 ms `verdict-in` ends on a descendant of #stage and
+  // would cut the 180 ms pulse short (reviewer, 2026-09-21). Only this element's own pulse may end it.
+  stage.addEventListener("animationend", onPulseEnd);
+  pulseTimer = window.setTimeout(clearPulse, PULSE_FALLBACK_MS);
 }
 
 /* ---------- the count (top left) ---------- */
@@ -144,7 +158,7 @@ function resetHud() {
   setGood(0);
   setAttempts(0);
   fpsEl.textContent = IDLE;
-  verdictShown = "";
+  verdictShown = IDLE;
   verdictBox.dataset.tone = "neutral";
   formEl.textContent = IDLE;
   hintShown = null;

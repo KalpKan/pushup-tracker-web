@@ -40,7 +40,7 @@ const PAUSED = "#b8b8b8";
 /** Matches --plate / --line in src/style.css so the canvas label and the DOM HUD are one material. */
 const PLATE = "rgba(15,17,22,0.78)";
 const PLATE_EDGE = "rgba(255,255,255,0.12)";
-const CONNECTOR = "rgba(255,255,255,0.55)";
+const CONNECTOR = "rgba(255,255,255,0.92)";
 
 export function draw(ctx: CanvasRenderingContext2D, source: CanvasImageSource, o: Overlay): void {
   const { width: w, height: h } = ctx.canvas;
@@ -86,16 +86,28 @@ export function draw(ctx: CanvasRenderingContext2D, source: CanvasImageSource, o
     const bendX = jx + dir * w * 0.07;
     const endX = jx + dir * w * 0.16;
     const endY = jy - h * 0.1;
+    // Two passes: a dark under-stroke in the plate colour, then the light line on top. A single 1 px
+    // white line measured ~1.2:1 against the blown-out wall that fills most of a real frame, so the
+    // label floated free of the joint it is about (reviewer, 2026-09-21).
+    const route = new Path2D();
+    route.moveTo(jx, jy);
+    route.lineTo(bendX, endY);
+    route.lineTo(endX, endY);
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = PLATE;
+    ctx.lineWidth = Math.max(4, w / 160);
+    ctx.stroke(route);
     ctx.strokeStyle = CONNECTOR;
-    ctx.lineWidth = Math.max(1, w / 900);
+    ctx.lineWidth = Math.max(1.5, w / 420);
+    ctx.stroke(route);
+    const dotR = Math.max(3, w / 200);
+    ctx.fillStyle = PLATE;
     ctx.beginPath();
-    ctx.moveTo(jx, jy);
-    ctx.lineTo(bendX, endY);
-    ctx.lineTo(endX, endY);
-    ctx.stroke();
+    ctx.arc(jx, jy, dotR + Math.max(1.5, w / 420), 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = CONNECTOR;
     ctx.beginPath();
-    ctx.arc(jx, jy, Math.max(2, w / 260), 0, Math.PI * 2);
+    ctx.arc(jx, jy, dotR, 0, Math.PI * 2);
     ctx.fill();
     ctx.font = `600 ${Math.max(10, Math.round(w / 52))}px "JetBrains Mono", ui-monospace, monospace`;
     ctx.textBaseline = "middle";
@@ -121,7 +133,10 @@ function plate(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
   ctx.strokeStyle = PLATE_EDGE;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+  // roundRect is Safari 16.4+; without the fallback an older Safari throws inside the frame loop and
+  // session.ts stops the whole session over a corner radius.
+  if (typeof ctx.roundRect === "function") ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+  else ctx.rect(boxX, boxY, boxW, boxH);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = "#ffffff";

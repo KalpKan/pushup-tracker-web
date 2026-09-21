@@ -279,7 +279,9 @@ function annotationFor(reason: string | null, g: Geometry, p: readonly Landmark[
   if (reason === "knees down" && g.kneeAngle < KNEE_DOWN_DEG) return { ...mid(25, 26), text: `KNEE ${Math.round(g.kneeAngle)} DEG` };
   if ((reason === "hips sagging" && g.hipDev > SAG_DEV) || (reason === "hips too high" && g.hipDev < PIKE_DEV)) {
     const sign = g.hipDev >= 0 ? "+" : "-";
-    return { ...mid(23, 24), text: `HIP ${sign}${Math.abs(g.hipDev).toFixed(2)} T` };
+    // Three decimals, not two: the annotation only appears once the threshold is passed, and "+0.18 T"
+    // rounded down onto the table's own "> +0.18 T" read as if the rule had not been tripped.
+    return { ...mid(23, 24), text: `HIP ${sign}${Math.abs(g.hipDev).toFixed(3)} T` };
   }
   return null;
 }

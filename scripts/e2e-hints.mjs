@@ -22,7 +22,9 @@ const TEXT_HOOK = () => {
     const now = performance.now();
     for (const id of WATCH) {
       const el = document.getElementById(id);
-      if (!el || el.hidden) continue;
+      // data-state="out" is the 400 ms fade; the hint is already logically gone, so counting those
+      // frames over-measured every hint's lastMs by up to 400 ms.
+      if (!el || el.hidden || el.dataset.state === "out") continue;
       const text = (el.textContent ?? "").trim();
       if (text) window.__texts.push([now, text]);
     }

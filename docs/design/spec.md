@@ -158,8 +158,9 @@ One easing family, declared once:
 | 7 | Button press / hover | background + 1px border tint, no transform | 120 ms | out | Micro feedback on a 48px target. |
 | 8 | Focus | outline appears | **0 ms, instant** | — | A focus ring must never be delayed. |
 
-Nothing else on the page moves. No scroll-driven motion, no smooth-scroll engine, no perpetual loop,
-no motion behind content.
+One more, found in review and added to the table in `DESIGN.md` §2: at ≤ 480 px, starting a session
+scrolls the stage into view (`behavior: "auto"` under reduced motion). Nothing else on the page moves.
+No scroll-driven motion, no smooth-scroll engine, no perpetual loop, no motion behind content.
 
 **`prefers-reduced-motion: reduce` — every one of the above lands on a complete static final state:**
 

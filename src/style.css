@@ -2,7 +2,7 @@
  * "Gym mirror" — docs/design/spec.md.
  * The video is the page: the count, the verdict, the fault and the placement hint live on the glass.
  * One accent (#ffe66d) and it means one thing: a rep was COUNTED. One added face (JetBrains Mono).
- * One easing family. Eight animations, all listed in spec.md §4, all with a static reduced-motion state.
+ * One easing family. Nine animations, all listed in DESIGN.md §2, all with a static reduced-motion state.
  */
 
 /* SIL Open Font License 1.1 — public/fonts/OFL.txt. Latin subset, self-hosted, no CDN. */
@@ -129,7 +129,9 @@ button.outline { background: var(--panel); border-color: #2a2f3b; }
 button.outline:hover:not(:disabled) { border-color: var(--line); }
 /* A 45 %-opacity accent button on black is a muddy olive with unreadable text; a disabled control is
    simply a quiet outline instead. */
-button:disabled { cursor: not-allowed; background: transparent; border-color: #2a2f3b; color: var(--muted); text-decoration: none; }
+button:disabled { cursor: not-allowed; background: transparent; border-color: #2a2f3b; color: var(--muted); }
+/* …but a disabled ghost stays a text button, never a second outlined box next to the primary. */
+button.ghost:disabled { border-color: transparent; }
 button[hidden] { display: none; }
 
 .status { min-height: 1.5em; margin: 12px 0 0; color: var(--muted); font: 400 13px/1.5 var(--mono); }
@@ -235,11 +237,18 @@ button[hidden] { display: none; }
 
 /* A narrow stage stacks the bottom row so the verdict and the meta line can never collide. */
 @container (max-width: 620px) {
-  .hud { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto auto; }
+  .hud {
+    --hud-pad: 10px;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto 1fr auto auto;
+    gap: 8px;
+  }
   .hud-count { grid-area: 1 / 1; }
-  .hud-hint { grid-area: 2 / 1; justify-self: end; max-width: 100%; font-size: 13px; }
-  .hud-verdict { grid-area: 4 / 1; justify-self: center; }
-  .hud-meta { grid-area: 5 / 1; justify-self: end; }
+  /* Beside the count, not under it: a 390-wide 16:9 stage is ~219 px tall and a five-row stack pushed
+     the meta line out through .stage's overflow whenever a hint was up (reviewer, 2026-09-21). */
+  .hud-hint { grid-area: 1 / 2; justify-self: end; align-self: start; max-width: 100%; font-size: 13px; }
+  .hud-verdict { grid-area: 3 / 1 / auto / span 2; justify-self: center; }
+  .hud-meta { grid-area: 4 / 1 / auto / span 2; justify-self: end; }
 }
 
 /* ---------- motion (spec.md §4) ---------- */
@@ -261,7 +270,6 @@ button[hidden] { display: none; }
 .hud-hint { transition: opacity var(--d-in) var(--ease-out), transform var(--d-in) var(--ease-out); }
 .hud-hint[data-state="out"] {
   opacity: 0;
-  transform: translateY(-4px);
   transition-duration: var(--d-out);
   transition-timing-function: var(--ease-in);
 }
@@ -338,6 +346,12 @@ button[hidden] { display: none; }
   .stage.live canvas { max-height: 62vh; object-fit: contain; }
   .thresholds, .thresholds tbody, .thresholds tr, .thresholds td { display: block; }
   .thresholds thead { display: none; }
+  /* Without these the caption stays a table-caption inside an anonymous shrink-to-fit table box — a
+     64 px ribbon 530 px tall — and the percentage column widths squeeze the value to ~107 px, which
+     together made the 390 page 2.1x taller than the page this redesign was fixing. */
+  .thresholds caption { display: block; }
+  .thresholds td:nth-child(1), .thresholds td:nth-child(2), .thresholds td:nth-child(3) { width: auto; }
+  .thresholds td:nth-child(2) { white-space: normal; }
   .thresholds tr { padding: 10px 0; border-bottom: 1px solid var(--hair); }
   .thresholds td { padding: 2px 0; border: 0; display: flex; gap: 10px; }
   .thresholds td::before {
@@ -367,5 +381,5 @@ button[hidden] { display: none; }
     box-shadow: inset 0 0 0 3px rgba(255, 230, 109, 0.65);
   }
   .hud-verdict.is-swap .v { animation: none; }
-  .hud-hint[data-state="out"] { opacity: 0; transform: none; }
+  .hud-hint[data-state="out"] { opacity: 0; }
 }

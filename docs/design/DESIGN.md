@@ -1,6 +1,6 @@
 # Pushup Form Tracker — design system
 
-Codename **"Gym mirror"**. Dark only. One accent. One added typeface. Eight animations.
+Codename **"Gym mirror"**. Dark only. One accent. One added typeface. Nine animations.
 
 The direction is the PRIMARY lane of `docs/design/app-directions.md` §5 in `KalpKan/portfolio`; the spec
 that was locked before any code is [`spec.md`](./spec.md); the implementation plan is
@@ -78,18 +78,20 @@ video, not the window. `.stage` is a `container-type: inline-size` container and
 
 ---
 
-## 2. The motion budget — eight items, and nothing else moves
+## 2. The motion budget — nine items, and nothing else moves
 
 | # | Moment | What moves | Duration | Reason (`animation-systems`) | Reduced-motion state |
 |---|---|---|---|---|---|
 | 1 | a good rep lands | the stage frame pulses to the accent (1 px border + a sharp 3 px inset ring, no blur) | 180 ms | **confirm action** — the only confirmation a face-down user gets | a **static** accent frame, applied instantly, removed after 600 ms; the count increment does the work |
+| | | *`AnimationEvent` bubbles, so the listener that ends the pulse checks `e.target === stage && e.animationName === "rep-pulse"`; without that the verdict word's 120 ms animation ended the pulse 64 ms early.* | | | |
 | 2 | any rep lands | the count digit changes | **0 ms** | a count-up tween would lie about when the rep landed | same (there is no animation to remove) |
 | 3 | the verdict word changes | the new word fades and rises 3 px into place; the plate is never blank | 120 ms | **confirm state change**; an out-phase would hide the one word the user is reading | instant |
 | 4 | a placement hint appears | opacity 0→1, translateY −4px→0 | 200 ms | **guide attention** to something fixable | instant |
-| 5 | a placement hint clears | opacity 1→0 | 400 ms | slower out, so a flickering detection cannot strobe | instant |
+| 5 | a placement hint clears | opacity 1→0 (opacity only) | 400 ms | slower out, so a flickering detection cannot strobe | instant |
 | 6 | a session starts | the poster cross-fades to the live canvas | 220 ms | **continuity** between the still and the feed | instant |
 | 7 | button hover / press | background and border tint, no transform | 120 ms | micro-feedback on a 48 px target | instant |
 | 8 | focus | the outline appears | **0 ms** | a focus ring must never be delayed | same |
+| 9 | a session starts at ≤ 480 px | the page scrolls the stage into view | browser default | **continuity**: on a phone the header and buttons push the stage below the fold, and the visitor is about to lie on the floor | `behavior: "auto"` — the stage is simply there |
 
 No scroll-driven motion, no smooth-scroll engine, no parallax, no perpetual loop, nothing animating
 behind content. `prefers-reduced-motion: reduce` lands on a complete static final state in every case,
@@ -114,14 +116,17 @@ never on a shortened animation; the rep confirmation in particular becomes a sta
 | error | `.live` removed | the poster returns; the status line carries an actionable message |
 
 The skeleton and the verdict plate are driven by **one** value (`session.ts`'s held rep result, falling
-back to the live verdict), so a red word can never sit over a green body.
+back to the live verdict), so a red word can never sit over a green body — and `paused` outranks both,
+because the skeleton greys the moment counting stops and a held "clean" over a grey body would say
+nothing is wrong at the one moment something is.
 
 ### HUD
 
 `<ul class="hud" role="list" aria-label="Session stats">`, CSS grid, `pointer-events: none`.
 Wide stage: count top-left, hint top-right, verdict bottom-centre, meta bottom-right. Below a **620 px
-stage** (a container query, not a viewport query) the bottom row stacks — verdict then meta — so the two
-can never collide on a phone.
+stage** (a container query, not a viewport query) the verdict and the meta line stack, and the hint stays
+**beside** the count rather than under it: a 390-wide 16:9 frame is only ~219 px tall, and a five-row
+stack pushed the meta plate out through the stage's `overflow: hidden` whenever a hint was up.
 
 ### Buttons
 
@@ -135,8 +140,9 @@ outline in `--muted`, never a 45 %-opacity accent (which renders as an unreadabl
 2 px bones and 4 px filled joint dots at the 640 px canvas both sources produce, scaled by canvas width;
 green when clean, red when faulted, grey when counting is paused. When a fault is on screen **and that
 frame's own geometry trips the documented threshold**, one 1 px routed connector runs from the
-responsible joint to a mono micro-label with the measurement — `HIP +0.18 T`, `KNEE 118 DEG` — on the
-same plate material as the DOM HUD. Never more than one annotation. Bottom-window faults ("dropped to
+responsible joint to a mono micro-label with the measurement — `HIP +0.183 T`, `KNEE 118 DEG` — on the
+same plate material as the DOM HUD. The connector is stroked twice, a dark under-stroke in `--plate`
+then the light line, because a single hairline is invisible against a blown-out frame. Never more than one annotation. Bottom-window faults ("dropped to
 the floor") are not annotated, because no single frame's joint explains them.
 
 ---
