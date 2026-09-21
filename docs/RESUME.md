@@ -50,6 +50,31 @@ Run the corpus with nothing else competing for the GPU: a run that drops to ~15 
 - `border-beam` is not installed: it is React-only and this app has no framework. Its principles are
   applied by hand to the one pulse (`DESIGN.md` §6).
 
+## The one open item (ready to write, deliberately not deployed)
+
+`#hud-hint` sets its text and *then* removes the `hidden` attribute, so a screen reader may miss the
+**first** hint of a session (later changes announce normally, because by then the element is in the
+accessibility tree). The verifier raised it as a note, not a failure. It was not shipped because the
+deploy budget was already one build over — fold it into the next change to this app.
+
+The fix, in `index.html` (a permanent live region that always exists) and `src/main.ts`:
+
+```html
+<!-- inside #stage's <ul class="hud">, the visual plate stops being the live region -->
+<li class="hud-hint" id="hud-hint" aria-hidden="true" hidden></li>
+...
+<!-- once, outside the stage: always present, so an insertion is always announced -->
+<p id="hint-live" class="visually-hidden" aria-live="polite"></p>
+```
+
+```ts
+const hintLive = $<HTMLElement>("hint-live");
+// …inside setHint(), alongside the existing visual updates:
+hintLive.textContent = text ?? "";
+```
+
+`.visually-hidden` is already defined, so nothing else is needed.
+
 ## If you have to change something
 
 The view is `index.html`, `src/style.css`, `src/main.ts`, `src/draw.ts`.
