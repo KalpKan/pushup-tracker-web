@@ -9,55 +9,95 @@
     />
     <meta name="theme-color" content="#0f1116" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/fonts/jetbrains-mono-latin-600.woff2" as="font" type="font/woff2" crossorigin />
     <title>Pushup Form Tracker</title>
   </head>
   <body>
+    <a class="skip" href="#stage">Skip to the tracker</a>
     <main class="app">
-      <header>
-        <p class="eyebrow">Browser ML · MediaPipe pose landmarks</p>
+      <header class="head">
         <h1>Pushup Form Tracker</h1>
         <p class="lede">
-          Phone or laptop on the floor, side-on (facing either way), whole body in frame, one person. Do pushups and
-          the page counts every rep and tells you why a rep was bad (hips sagging, hips too high, knees down, dropped
-          to the floor, too shallow). Everything runs on your device: the pose model is downloaded once (about 20 MB)
-          and no frame is ever uploaded. Ported from the <a href="https://github.com/KalpKan/AI-Pushup-Form-Tracker">Python original</a>.
+          Phone or laptop on the floor, side-on (facing either way), whole body in frame, one person.
         </p>
       </header>
 
-      <section aria-labelledby="controls-heading">
-        <h2 id="controls-heading" class="visually-hidden" hidden>Controls</h2>
+      <section aria-labelledby="controls-heading" class="controls">
+        <h2 id="controls-heading" class="visually-hidden">Controls</h2>
         <div class="buttons">
           <button id="start-camera" class="primary" type="button">Start camera</button>
-          <button id="play-demo" type="button">Play demo clip</button>
-          <button id="stop" type="button" hidden>Stop</button>
+          <button id="play-demo" class="ghost" type="button">Play demo clip</button>
+          <button id="stop" class="outline" type="button" hidden>Stop</button>
         </div>
         <p id="status" class="status" aria-live="polite">Nothing loads until you press a button.</p>
       </section>
 
-      <section id="stage" class="stage" aria-label="Tracker view">
+      <section id="stage" class="stage" tabindex="-1" aria-label="Tracker view">
+        <img id="poster" class="poster" src="/poster.webp" width="640" height="360" alt="" decoding="async" />
         <p class="placeholder">Your camera (mirrored) or the demo clip appears here with the skeleton, the rep count and the form verdict drawn on top.</p>
         <video id="video" playsinline muted></video>
         <canvas id="canvas" aria-label="Pose overlay"></canvas>
+        <ul class="hud" role="list" aria-label="Session stats">
+          <li class="hud-count"><span class="v" id="stat-good">0</span><span class="k">good reps</span></li>
+          <li class="hud-hint" id="hud-hint" aria-live="polite" hidden></li>
+          <li class="hud-verdict" id="hud-verdict" data-tone="neutral"><span class="v" id="stat-form">—</span></li>
+          <li class="hud-meta"><span id="stat-total">0</span> <span id="attempts-word">attempts</span><span aria-hidden="true"> · </span><span id="stat-fps">—</span></li>
+        </ul>
       </section>
 
-      <ul class="stats" aria-label="Session stats">
-        <li><span class="k">Good reps</span><span class="v" id="stat-good">0</span></li>
-        <li><span class="k">Attempts</span><span class="v" id="stat-total">0</span></li>
-        <li><span class="k">Form now</span><span class="v" id="stat-form">–</span></li>
-        <li><span class="k">Speed</span><span class="v" id="stat-fps">–</span></li>
-      </ul>
+      <section class="notes" aria-labelledby="decides-heading">
+        <h2 id="decides-heading">How it decides</h2>
+        <p class="intro">
+          Do pushups and the page counts every rep and tells you why a rep was bad (hips sagging, hips too high,
+          knees down, dropped to the floor, too shallow). Everything runs on your device: the pose model is
+          downloaded once (about 20 MB) and no frame is ever uploaded. Ported from the
+          <a href="https://github.com/KalpKan/AI-Pushup-Form-Tracker">Python original</a>.
+        </p>
 
-      <section class="notes">
-        <h2>How it decides</h2>
-        <ul>
-          <li>MediaPipe PoseLandmarker (full) finds 33 body points on every frame, on your GPU when available.</li>
-          <li>Shoulder height tracks the movement. A rep is top → bottom → top; the dip must be at least a quarter of your torso length (shallower dips say "go lower" and do not count). Standing up, walking into the frame or dropping from a plank onto your knees to rest never count; a knee pushup (knees on the floor from the start) counts as an attempt and is graded "knees down".</li>
-          <li>Form is judged by geometry, in units of your own torso length so the camera distance and the way you face do not matter. Just before the descent and at the bottom: hips more than a fifth of a torso below the shoulder–ankle line is "hips sagging", above it is "hips too high", a knee angle under 130° is "knees down". At the bottom, averaged over the frames spent there: elbows still level with the shoulders (the body came down without the arms bending back) is "dropped to the floor", and a chest kept half a torso above the hands while the hips hang a fifth below the shoulders is "hips sagging" too.</li>
-          <li>There is no neural network any more. The classifier the Python original shipped (trained on one person's videos) was retired on 2026-09-19: held out honestly it scored that person's own unseen bad reps 50/50, called every clean rep of a second person bad, swung from 0.97 to 0.01 between neighbouring frames, and had been switched off for anyone facing the other way. Rules you can read beat a coin you cannot.</li>
-          <li>While a placement hint is on screen (head or feet cut off, two people, frontal view, too dark) counting is paused and the skeleton turns grey, so a half-visible body cannot produce a silent wrong count.</li>
-        </ul>
-        <h2>Tips</h2>
-        <ul>
+        <div class="rules">
+          <section class="rule">
+            <h3>What it watches</h3>
+            <p>MediaPipe PoseLandmarker (full) finds 33 body points on every frame, on your GPU when available.</p>
+          </section>
+          <section class="rule">
+            <h3>What counts as a rep</h3>
+            <p>Shoulder height tracks the movement. A rep is top → bottom → top; the dip must be at least a quarter of your torso length (shallower dips say "go lower" and do not count). Standing up, walking into the frame or dropping from a plank onto your knees to rest never count; a knee pushup (knees on the floor from the start) counts as an attempt and is graded "knees down".</p>
+          </section>
+          <section class="rule">
+            <h3>How form is judged</h3>
+            <p>Form is judged by geometry, in units of your own torso length so the camera distance and the way you face do not matter. Just before the descent and at the bottom: hips more than a fifth of a torso below the shoulder–ankle line is "hips sagging", above it is "hips too high", a knee angle under 130° is "knees down". At the bottom, averaged over the frames spent there: elbows still level with the shoulders (the body came down without the arms bending back) is "dropped to the floor", and a chest kept half a torso above the hands while the hips hang a fifth below the shoulders is "hips sagging" too.</p>
+          </section>
+          <section class="rule">
+            <h3>When counting pauses</h3>
+            <p>While a placement hint is on screen (head or feet cut off, two people, frontal view, too dark) counting is paused and the skeleton turns grey, so a half-visible body cannot produce a silent wrong count.</p>
+          </section>
+        </div>
+
+        <table class="thresholds">
+          <caption>The same numbers, at a glance. One torso length (T) is the distance from your shoulder to your hip, so none of this depends on how far away the camera is.</caption>
+          <thead>
+            <tr><th scope="col">Measure</th><th scope="col">Threshold</th><th scope="col">Then</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-k="Measure">Dip depth</td><td data-k="Threshold">≥ 0.25 T</td><td data-k="Then">counts as a rep; below that, "go lower"</td></tr>
+            <tr><td data-k="Measure">Hip below the shoulder–ankle line</td><td data-k="Threshold">&gt; +0.18 T</td><td data-k="Then">hips sagging</td></tr>
+            <tr><td data-k="Measure">Hip above that line</td><td data-k="Threshold">&lt; −0.26 T</td><td data-k="Then">hips too high</td></tr>
+            <tr><td data-k="Measure">Knee angle</td><td data-k="Threshold">&lt; 130°</td><td data-k="Then">knees down</td></tr>
+            <tr><td data-k="Measure">Body angle to the horizontal</td><td data-k="Threshold">≤ 30°</td><td data-k="Then">counts as a plank</td></tr>
+            <tr><td data-k="Measure">Elbow still level with the shoulder at the bottom</td><td data-k="Threshold">&gt; −0.09 T</td><td data-k="Then">dropped to the floor</td></tr>
+            <tr><td data-k="Measure">Chest above the hands at the bottom</td><td data-k="Threshold">&gt; 0.50 T, hips &gt; 0.20 T below</td><td data-k="Then">hips sagging</td></tr>
+            <tr><td data-k="Measure">Guessed head cluster</td><td data-k="Threshold">&lt; 0.13 T</td><td data-k="Then">head out of frame</td></tr>
+            <tr><td data-k="Measure">Frame brightness</td><td data-k="Threshold">&lt; 0.12</td><td data-k="Then">too dark</td></tr>
+          </tbody>
+        </table>
+
+        <aside class="aside">
+          <h3>Why there is no neural network</h3>
+          <p>There is no neural network any more. The classifier the Python original shipped (trained on one person's videos) was retired on 2026-09-19: held out honestly it scored that person's own unseen bad reps 50/50, called every clean rep of a second person bad, swung from 0.97 to 0.01 between neighbouring frames, and had been switched off for anyone facing the other way. Rules you can read beat a coin you cannot.</p>
+        </aside>
+
+        <h2 id="tips-heading">Tips</h2>
+        <ul class="tips" aria-labelledby="tips-heading">
           <li>Camera at roughly floor level, whole body in frame, side view, one person. The overlay tells you when the head or feet are cut off, when two people are in the frame, when you face the camera instead of side-on, and when it is too dark.</li>
           <li>The first rep counts: there is no calibration, the range is measured against your own body.</li>
           <li>Limits: a frontal view is not graded (you get a "turn side-on" hint instead). A sag, a pike, kneeling and a body dropped onto the floor with the arms straight are caught; a rep that rests on the floor and pushes the chest up first with the arms properly bent looks like a clean rep to 2D landmarks and is counted as one.</li>

@@ -6,6 +6,7 @@
 import { loadPoseLandmarker } from "./pose";
 import { features, type Point3 } from "./features";
 import { createTracker, type FrameVerdict } from "./tracker";
+import { KNEE_DOWN_DEG, PIKE_DEV, SAG_DEV, type Geometry } from "./form";
 import type { RepEvent, RepState } from "./repCounter";
 import { placementHint, pausesCounting, createHintDebouncer, mainFirst, HINTS } from "./hints";
 import { draw } from "./draw";
@@ -18,8 +19,12 @@ export interface SessionOptions {
   canvas: HTMLCanvasElement;
   onStatus: (text: string) => void;
   onRep: (event: RepEvent) => void;
-  /** `hint` is the placement hint on screen; `paused` says the counter is not counting (then `verdict` is null). */
-  onFrame: (state: RepState, verdict: FrameVerdict | null, fps: number, hint: string | null, paused: boolean) => void;
+  /**
+   * `hint` is the placement hint on screen; `paused` says the counter is not counting (then `verdict` is
+   * null); `result` is the rep that just finished (or a too-shallow dip), held for REP_HOLD_MS so the
+   * overlay and the HUD show the same thing for the same length of time.
+   */
+  onFrame: (state: RepState, verdict: FrameVerdict | null, fps: number, hint: string | null, paused: boolean, result: RepResult | null) => void;
   onEnd: () => void;
   /** The frame loop threw (a bad model, a lost WebGL context, ...): the session is already stopped. */
   onError: (err: Error) => void;
@@ -32,8 +37,17 @@ export interface Session {
 const DEMO_SRC = "/demo/pushups.mp4";
 /** A placement problem must persist this long before the overlay shows it (and be gone this long before it hides). */
 const HINT_DEBOUNCE_MS = 700;
-/** How long the verdict of the rep that just finished stays on the overlay. */
-const REP_FLASH_MS = 1500;
+/**
+ * How long the result of the rep that just finished holds both the skeleton's colour and the HUD's
+ * verdict plate. One constant, so the two can never disagree.
+ */
+export const REP_HOLD_MS = 1500;
+
+/** The rep that just finished. `reason` is null for a clean rep and "go lower" for a dip too shallow to count. */
+export interface RepResult {
+  good: boolean;
+  reason: string | null;
+}
 /** Landmarks with a lower mean visibility of shoulders + hips are not fed to the counter. */
 const MIN_VISIBILITY = 0.5;
 
@@ -115,7 +129,7 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
   let fps = 0;
   const hints = createHintDebouncer(HINT_DEBOUNCE_MS);
   const pauseGate = createHintDebouncer(HINT_DEBOUNCE_MS);
-  let flash: { text: string; good: boolean; until: number } | null = null;
+  let held: { good: boolean; reason: string | null; until: number } | null = null;
   opts.onStatus(mode === "camera" ? "Get into pushup position side-on to the camera, whole body in frame." : "Running the bundled clip.");
 
   function pickPose(poses: Landmark[][]): Landmark[] | null {
@@ -163,10 +177,10 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
       const ev = tracker.push(input);
       if (trace) trace.push({ t: input.t, mediaTime: video.currentTime, shoulderY: f.shoulderY, features: f.vector.map((x) => Math.round(x * 1e4) / 1e4), faults: verdict.reason, plank: verdict.plank, event: ev ? (ev.kind === "rep" ? (ev.good ? "good" : `bad:${ev.reason}`) : "partial") : null, poses: poses.length });
       if (ev?.kind === "rep") {
-        flash = { text: ev.good ? `Rep ${ev.totalReps}: good` : `Rep ${ev.totalReps}: ${ev.reason}`, good: ev.good, until: now + REP_FLASH_MS };
+        held = { good: ev.good, reason: ev.reason, until: now + REP_HOLD_MS };
         opts.onRep(ev);
       } else if (ev?.kind === "partial") {
-        flash = { text: "Go lower: that dip was too shallow to count", good: false, until: now + REP_FLASH_MS };
+        held = { good: false, reason: "go lower", until: now + REP_HOLD_MS };
       }
     }
     // Every analysed frame leaves a trace row, including a found-but-invisible body (round-4 critique: those
@@ -181,15 +195,17 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
       }
     }
     const st = tracker.state();
+    const repResult: RepResult | null = held && held.until > now ? { good: held.good, reason: held.reason } : null;
+    const shown = repResult ?? (verdict ? { good: verdict.good, reason: verdict.reason } : null);
     draw(ctx!, video, {
       landmarks,
-      goodReps: st.goodReps,
-      totalReps: st.totalReps,
-      verdict: verdict ? { good: verdict.good, reason: verdict.reason } : null,
+      // While a rep's result is held, the skeleton shows that result: a red "hips sagging" plate over a
+      // green body would be two answers to the same question.
+      verdict: shown,
       mirror,
-      hint,
       paused: paused && landmarks != null,
-      flash: flash && flash.until > now ? { text: flash.text, good: flash.good } : null,
+      // The annotation explains whatever the plate is currently saying, so the two never disagree.
+      annotation: !paused && verdict && landmarks && shown && !shown.good ? annotationFor(shown.reason, verdict.geometry, landmarks) : null,
     });
     frames++;
     if (now - fpsStart >= 1000) {
@@ -197,7 +213,7 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
       frames = 0;
       fpsStart = now;
     }
-    opts.onFrame(st, verdict, fps, hint, paused);
+    opts.onFrame(st, verdict, fps, hint, paused, repResult);
   }
 
   // One analysis per decoded video frame: requestVideoFrameCallback where it exists (Chrome, Safari,
@@ -247,6 +263,27 @@ export async function startSession(opts: SessionOptions): Promise<Session> {
 
   schedule();
   return { stop };
+}
+
+/**
+ * The joint that a held live fault is about, plus the number that made it one, for the one routed
+ * annotation on the canvas (docs/design/spec.md §6, `technical-wireframe-info-layout`). Presentation
+ * only: it reads the geometry the tracker already computed and changes no judgement. The bottom-window
+ * faults ("dropped to the floor") are deliberately not annotated — no single frame's joint explains them.
+ */
+function annotationFor(reason: string | null, g: Geometry, p: readonly Landmark[]): { jx: number; jy: number; text: string } | null {
+  const mid = (a: number, b: number) => ({ jx: (p[a].x + p[b].x) / 2, jy: (p[a].y + p[b].y) / 2 });
+  // The verdict is a majority over the last 0.25 s, so a single frame can carry a fault whose joint is
+  // momentarily back inside the threshold. Annotating that frame would print a number that contradicts
+  // the page's own threshold table, so the annotation is shown only while THIS frame trips the rule.
+  if (reason === "knees down" && g.kneeAngle < KNEE_DOWN_DEG) return { ...mid(25, 26), text: `KNEE ${Math.round(g.kneeAngle)} DEG` };
+  if ((reason === "hips sagging" && g.hipDev > SAG_DEV) || (reason === "hips too high" && g.hipDev < PIKE_DEV)) {
+    const sign = g.hipDev >= 0 ? "+" : "-";
+    // Three decimals, not two: the annotation only appears once the threshold is passed, and "+0.18 T"
+    // rounded down onto the table's own "> +0.18 T" read as if the rule had not been tripped.
+    return { ...mid(23, 24), text: `HIP ${sign}${Math.abs(g.hipDev).toFixed(3)} T` };
+  }
+  return null;
 }
 
 export { HINTS };
