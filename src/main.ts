@@ -126,10 +126,22 @@ function pulseRep() {
   pulseTimer = window.setTimeout(() => delete stage.dataset.rep, PULSE_FALLBACK_MS);
 }
 
+/* ---------- the count (top left) ---------- */
+
+let goodShown = -1;
+/** Instant, never tweened: a count-up would lie about when the rep landed. */
+function setGood(n: number) {
+  if (n === goodShown) return;
+  goodShown = n;
+  goodEl.textContent = String(n);
+}
+
 /* ---------- session ---------- */
 
 function resetHud() {
-  goodEl.textContent = "0";
+  goodShown = -1;
+  attemptsShown = -1;
+  setGood(0);
   setAttempts(0);
   fpsEl.textContent = IDLE;
   verdictShown = "";
@@ -140,7 +152,10 @@ function resetHud() {
   delete stage.dataset.rep;
 }
 
+let attemptsShown = -1;
 function setAttempts(n: number) {
+  if (n === attemptsShown) return;
+  attemptsShown = n;
   totalEl.textContent = String(n);
   attemptsWord.textContent = n === 1 ? "attempt" : "attempts";
 }
@@ -169,14 +184,14 @@ async function start(mode: Mode) {
       canvas,
       onStatus: setStatus,
       onRep: (ev) => {
-        goodEl.textContent = String(ev.goodReps);
+        setGood(ev.goodReps);
         setAttempts(ev.totalReps);
         // The accent means one thing on this page: a rep was counted.
         if (ev.good) pulseRep();
         capture("rep_counted", { good: ev.good, reason: ev.reason });
       },
       onFrame: (st, verdict, fps, hint, paused, result) => {
-        goodEl.textContent = String(st.goodReps);
+        setGood(st.goodReps);
         setAttempts(st.totalReps);
         const [text, tone] = verdictWords(paused, verdict, result);
         setVerdict(text, tone);
